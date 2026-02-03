@@ -1,0 +1,67 @@
+﻿@page "/not-found"
+@layout MainLayout
+
+<PageTitle>Page Not Found - Your App Name</PageTitle>
+
+<div class="min-vh-100 d-flex align-items-center justify-content-center bg-gradient">
+    <div class="text-center p-5">
+        <!-- Large 404 -->
+        <h1 class="display-1 fw-bold text-primary mb-3">404</h1>
+
+        <!-- Subtitle -->
+        <h2 class="fs-1 mb-4 text-dark">Oops! Page not found</h2>
+
+        <p class="lead text-muted mb-5 max-w-500 mx-auto">
+            The page you're looking for doesn't exist. It might have been moved, deleted,
+            or you may have mistyped the address.
+        </p>
+
+        <!-- Action buttons -->
+        <div class="d-flex flex-column flex-sm-row gap-3 justify-content-center">
+            <a href="" class="btn btn-primary btn-lg px-5 py-3 d-flex align-items-center justify-content-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-house" viewBox="0 0 16 16">
+                    <path d="M8.707 1.5a1 1 0 0 0-1.414 0L.646 8.146a.5.5 0 0 0 .708.708L2 8.207V13.5a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5V8.207l.646.647a.5.5 0 0 0 .708-.708L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.707 1.5Z" />
+                    <path d="M8 3.293l6 6V13.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5V9.293l6-6Z" />
+                </svg>
+                Go Home
+            </a>
+
+            <button @onclick="GoBack" class="btn btn-outline-secondary btn-lg px-5 py-3">
+                Go Back
+            </button>
+        </div>
+
+        <!-- Optional fun illustration or Lottie (you can add one if you want) -->
+        <div class="mt-5">
+            <img src="https://cdn.jsdelivr.net/gh/atisawd/boxicons@latest/svg/solid/bxs-confused.svg"
+                 alt="Confused"
+                 width="120"
+                 class="opacity-75" />
+        </div>
+    </div>
+</div>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: false);
+        // Or simpler: go back in history
+        Navigation.NavigateTo("javascript:history.back()");
+    }
+}
+
+<style>
+    .bg-gradient {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+    .max-w-500 {
+        max-width: 500px;
+    }
+    @@media (max-width: 576px) {
+        .display-1 {
+            font-size: 6rem;
+        }
+    }
+</style>

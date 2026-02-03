@@ -1,0 +1,139 @@
+﻿@page "/trailers/create"
+@using OutsourceTracker.ModelService.Requests.Trailers
+@using OutsourceTracker.Services
+
+<PageTitle>New Trailer</PageTitle>
+
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-xl-6">
+            <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+                <div class="card-header bg-primary bg-gradient text-white py-4">
+                    <h3 class="mb-0 fw-semibold text-center">New Trailer Registration</h3>
+                </div>
+                <div class="card-body p-4 p-md-5">
+                    @if (!string.IsNullOrEmpty(message))
+                    {
+                        <div class="alert alert-@messageType alert-dismissible fade show mb-4" role="alert">
+                            @message
+                            <button type="button" class="btn-close" @onclick="() => { message = null; messageType = null; }"></button>
+                        </div>
+                    }
+
+                    <EditForm Model="@request" OnValidSubmit="HandleValidSubmit" FormName="trailerCreate">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="text-danger mb-4" />
+
+                        <!-- Prefix -->
+                        <div class="form-floating mb-4">
+                            <InputText id="prefix"
+                                       @bind-Value="request.Prefix"
+                                       @oninput="@(e => request.Prefix = e.Value?.ToString()?.ToUpperInvariant())"
+                                       class="form-control"
+                                       placeholder="JBHZ" />
+                            <label for="prefix">Prefix <span class="text-danger">*</span></label>
+                            <ValidationMessage For="@(() => request.Prefix)" />
+                            <div class="form-text text-muted mt-1 small">
+                                e.g. JBHZ, JBHU, JBRU – organizational/unit identifier
+                            </div>
+                        </div>
+
+                        <!-- Trailer Number/Name -->
+                        <div class="form-floating mb-5">
+                            <InputText id="name"
+                                       @bind-Value="request.Name"
+                                       @oninput="@(e => request.Name = e.Value?.ToString()?.ToUpperInvariant())"
+                                       class="form-control" />
+                            <label for="name">Trailer Number <span class="text-danger">*</span></label>
+                            <ValidationMessage For="@(() => request.Name)" />
+                            <div class="form-text text-muted mt-1 small">
+                                Unique identifier (e.g. 056779)
+                            </div>
+                        </div>
+
+                        <!-- Responsive "table-like" preview of what will be created -->
+                        <div class="border rounded p-3 mb-4 bg-light">
+                            <h6 class="mb-3 text-muted">Preview</h6>
+                            <div class="d-flex flex-column flex-sm-row gap-3 justify-content-between">
+                                <div class="d-flex flex-column">
+                                    <span class="text-muted small">Prefix</span>
+                                    <strong>@(string.IsNullOrWhiteSpace(request.Prefix) ? "—" : request.Prefix)</strong>
+                                </div>
+                                <div class="d-flex flex-column">
+                                    <span class="text-muted small">Trailer</span>
+                                    <strong>@(string.IsNullOrWhiteSpace(request.Name) ? "—" : request.Name)</strong>
+                                </div>
+                                <div class="d-flex flex-column">
+                                    <span class="text-muted small">Combined ID</span>
+                                    <strong>@GetCombinedId()</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex flex-column flex-sm-row gap-3 justify-content-end mt-5">
+                            <button type="button"
+                                    class="btn btn-outline-secondary btn-lg px-5 py-3"
+                                    @onclick='() => Navigation.NavigateTo("/trailers")'
+                                    disabled="@isSubmitting">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                    class="btn btn-primary btn-lg px-5 py-3 fw-semibold"
+                                    disabled="@isSubmitting">
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style="@(isSubmitting ? "" : "display:none")"></span>
+                                @(isSubmitting ? "Creating..." : "Create Trailer")
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private TrailerCreateRequest request = new();
+    private bool isSubmitting = false;
+    private string? message;
+    private string? messageType; // "success" or "danger"
+
+    [Inject] private TrailerService DataContext { get; set; } = default!;
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private string GetCombinedId()
+    {
+        if (string.IsNullOrWhiteSpace(request.Prefix))
+            return request.Name ?? "—";
+
+        return $"{request.Prefix.Trim()} {request.Name?.Trim() ?? "?"}";
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        isSubmitting = true;
+        message = null;
+        messageType = null;
+
+        try
+        {
+            Guid id = await DataContext.Create(request);
+
+            message = "Trailer created successfully!";
+            messageType = "success";
+
+            // Auto-redirect after short delay
+            await Task.Delay(1800);
+            Navigation.NavigateTo($"/trailer/{id}");
+        }
+        catch (Exception ex)
+        {
+            message = $"Error: {ex.Message}";
+            messageType = "danger";
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,215 @@
+﻿@page "/trailers/spot"
+@page "/trailers/spot/{Prefix}/{Trailer}"
+@using OutsourceTracker.ModelService.Requests.Trailers
+@using OutsourceTracker.Models.Trailers
+@using OutsourceTracker.Services
+
+<PageTitle>Spot Trailer Location</PageTitle>
+
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-xl-6">
+            <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+                <div class="card-header bg-success bg-gradient text-white py-4">
+                    <h3 class="mb-0 fw-semibold text-center">Update Trailer Location</h3>
+                </div>
+                <div class="card-body p-4 p-md-5">
+                    @if (!string.IsNullOrEmpty(message))
+                    {
+                        <div class="alert alert-@messageType alert-dismissible fade show mb-4" role="alert">
+                            @message
+                            <button type="button" class="btn-close" @onclick="ClearMessage"></button>
+                        </div>
+                    }
+
+                    <EditForm Model="@request" OnValidSubmit="HandleSubmit" FormName="trailerSpot">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="text-danger mb-4" />
+
+                        <!-- Trailer Prefix -->
+                        <div class="form-floating mb-4 uppercase-input">
+                            <InputText id="prefix"
+                                       @bind-Value="request.Prefix"
+                                       @oninput="@(e => request.Prefix = e.Value?.ToString()?.ToUpperInvariant())"
+                                       class="form-control"
+                                       placeholder="JBHZ" />
+                            <label for="prefix">Prefix <span class="text-danger">*</span></label>
+                            <ValidationMessage For="@(() => request.Prefix)" />
+                            <div class="form-text text-muted small">
+                                e.g. JBHZ, JBHU – trailer prefix
+                            </div>
+                        </div>
+
+                        <!-- Trailer Number -->
+                        <div class="form-floating mb-5 uppercase-input">
+                            <InputText id="name"
+                                       @bind-Value="request.Name"
+                                       @oninput="@(e => request.Name = e.Value?.ToString()?.ToUpperInvariant())"
+                                       class="form-control"
+                                       placeholder="056779" />
+                            <label for="name">Trailer Number <span class="text-danger">*</span></label>
+                            <ValidationMessage For="@(() => request.Name)" />
+                            <div class="form-text text-muted small">
+                                e.g. 056779, TR-456
+                            </div>
+                        </div>
+
+                        <!-- Location Section -->
+                        <div class="border rounded-3 p-4 mb-5 bg-light-subtle">
+                            <h6 class="mb-3 text-uppercase fw-semibold text-secondary">Current Location</h6>
+
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <InputNumber id="lat" @bind-Value="request.Latitude" class="form-control" step="any" />
+                                        <label for="lat">Latitude <span class="text-danger">*</span></label>
+                                        <ValidationMessage For="@(() => request.Latitude)" />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <InputNumber id="lon" @bind-Value="request.Longitude" class="form-control" step="any" />
+                                        <label for="lon">Longitude <span class="text-danger">*</span></label>
+                                        <ValidationMessage For="@(() => request.Longitude)" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="button" 
+                                    class="btn btn-outline-primary btn-lg w-100 mb-3"
+                                    @onclick="GetCurrentLocation"
+                                    disabled="@isLocating">
+                                <span class="spinner-border spinner-border-sm me-2" role="status" style="@(isLocating ? "" : "display:none")"></span>
+                                @(isLocating ? "Locating..." : "Locate (Use Current GPS)")
+                            </button>
+
+                            <div class="form-text text-muted small text-center">
+                                Click "Locate" to auto-fill from device GPS (requires permission). Or enter coordinates manually.
+                            </div>
+                        </div>
+
+                        <div class="d-flex flex-column flex-sm-row gap-3 justify-content-end mt-5">
+                            <button type="button"
+                                    class="btn btn-outline-secondary btn-lg px-5 py-3"
+                                    @onclick='() => Navigation.NavigateTo("/trailers")'
+                                    disabled="@isSubmitting">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                    class="btn btn-success btn-lg px-5 py-3 fw-semibold"
+                                    disabled="@isSubmitting">
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style="@(isSubmitting ? "" : "display:none")"></span>
+                                @(isSubmitting ? "Submitting..." : "Submit Location")
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private TrailerUpdateRequest request = new();  // Create this model below
+    private bool isSubmitting = false;
+    private bool isLocating = false;
+    private string? message;
+    private string? messageType; // success / danger
+
+    [Inject] private TrailerService DataContext { get; set; } = default!;
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Parameter] public string? Prefix { get; set; }
+    [Parameter] public string? Trailer { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        request.Prefix = Prefix;
+        request.Name = Trailer;
+    }
+
+    private async Task GetCurrentLocation()
+    {
+        isLocating = true;
+        message = null;
+        ClearMessage();
+
+        try
+        {
+            var position = await JS.InvokeAsync<GeolocationPosition>("navigator.geolocation.getCurrentPositionWrapper");
+            request.Latitude = position.Coords.Latitude;
+            request.Longitude = position.Coords.Longitude;
+            request.Accuracy = position.Coords.Accuracy;
+            message = "GPS location captured successfully!";
+            messageType = "success";
+        }
+        catch (JSException ex)
+        {
+            // Common errors: user denied, timeout, unavailable
+            message = ex.Message.Contains("User denied") 
+                ? "Location access denied. Please allow location permission or enter manually."
+                : $"Could not get location: {ex.Message}";
+            messageType = "danger";
+        }
+        catch (Exception ex)
+        {
+            message = $"Unexpected error: {ex.Message}";
+            messageType = "danger";
+        }
+        finally
+        {
+            isLocating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSubmitting = true;
+        message = null;
+        ClearMessage();
+
+        try
+        {
+            TrailerViewModel? trailer = await DataContext.Find(new TrailerFindRequest
+            {
+                Prefix = request.Prefix,
+                Name = request.Name
+            }).FirstOrDefaultAsync();
+
+            if (trailer == null || !trailer.Prefix.Equals(request.Prefix, StringComparison.CurrentCultureIgnoreCase) || !trailer.Name.Equals(request.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new KeyNotFoundException($"Trailer not found with identifier {request.Prefix} {request.Name}");
+            }
+
+            request.Prefix = null;
+            request.Name = null;
+            request.SpottedBy = "Austin Vandersluis";
+
+            await DataContext.Update(trailer.Id, request);  // Adjust method name to your service
+
+            message = "Trailer location updated successfully!";
+            messageType = "success";
+
+            await Task.Delay(1800);
+            Navigation.NavigateTo($"/trailer/{trailer.Id}");
+        }
+        catch (Exception ex)
+        {
+            message = $"Error: {ex.Message}";
+            messageType = "danger";
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearMessage()
+    {
+        message = null;
+        messageType = null;
+    }
+}

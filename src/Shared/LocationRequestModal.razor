@@ -1,0 +1,81 @@
+﻿@inject IJSRuntime JS
+
+<div class="modal fade @(IsVisible ? "show d-block" : "")" tabindex="-1" role="dialog" style="display: @(IsVisible ? "block" : "none");" aria-hidden="@(!IsVisible)">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Get Coordinates</h5>
+                <button type="button" class="btn-close" @onclick="CloseModal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container-fluid">
+                    <div class="row mb-3">
+                        <div class="col-12 col-md-6">
+                            <label for="latitude" class="form-label">Latitude</label>
+                            <input type="number" class="form-control" id="latitude" @bind="Latitude" step="any" />
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label for="longitude" class="form-label">Longitude</label>
+                            <input type="number" class="form-control" id="longitude" @bind="Longitude" step="any" />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <button class="btn btn-primary" @onclick="@(() => SubmitLocation(false))">Locate</button>
+                            <button class="btn btn-secondary" @onclick="@(() => SubmitLocation(true))">Submit</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public double? Latitude { get; set; }
+    [Parameter] public double? Longitude { get; set; }
+    [Parameter] public double? Accuracy { get; set; }
+    [Parameter] public EventCallback<LocationUpdateResult> LocationUpdated { get; set; }
+
+    private async Task SubmitLocation(bool manual)
+    {
+        LocationUpdateResult loc = new LocationUpdateResult();
+        if (!manual)
+        {
+            try
+            {
+                var position = await JS.InvokeAsync<GeolocationPosition>("navigator.geolocation.getCurrentPositionWrapper");
+                loc.Latititude = position.Coords.Latitude;
+                loc.Longitude = position.Coords.Longitude;
+                loc.Accuracy = position.Coords.Accuracy;
+            }
+            catch (Exception ex)
+            {
+            }
+        }
+        else
+        {
+            if (Latitude.HasValue && Longitude.HasValue)
+            {
+                loc.Latititude = Latitude.Value;
+                loc.Longitude = Longitude.Value;
+                loc.Accuracy = 150;
+            }
+        }
+
+        if (LocationUpdated.HasDelegate)
+            await LocationUpdated.InvokeAsync(loc);
+
+        await CloseModal();
+    }
+
+    private async Task CloseModal()
+    {
+        Latitude = null;
+        Longitude = null;
+        Accuracy = null;
+        IsVisible = false;
+        StateHasChanged();
+    }
+}

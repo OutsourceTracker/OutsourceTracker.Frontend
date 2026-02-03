@@ -1,0 +1,18 @@
+mode: Mainline
+branches:
+  master:
+    regex: ^master$
+    mode: ContinuousDeployment
+    increment: Patch
+    tag: ''
+    prevent-increment-of-merged-branch-version: true
+    is-mainline: true
+    pre-release-weight: 55000
+  feature:
+    regex: ^feature[s]?/.*$
+    mode: ContinuousDeployment
+    tag: alpha
+    increment: Minor
+    source-branches: ['master']
+ignore:
+  sha: []

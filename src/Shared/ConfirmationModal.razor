@@ -1,0 +1,45 @@
+﻿@* ConfirmationModal.razor - Bootstrap 5 Modal *@
+
+<div class="modal fade @(IsVisible ? "show d-block" : "")" tabindex="-1" role="dialog" style="display: @(IsVisible ? "block" : "none");" aria-hidden="@(!IsVisible)">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Title</h5>
+                <button type="button" class="btn-close" @onclick="HandleNo" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>@Message</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="HandleNo">@NoButtonText</button>
+                <button type="button" class="btn btn-primary" @onclick="HandleYes">@YesButtonText</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (IsVisible)
+{
+    <div class="modal-backdrop fade show" @onclick="HandleNo"></div>
+}
+
+@code {
+    [Parameter] public string Title { get; set; } = "Confirmation";
+    [Parameter] public string Message { get; set; } = "Are you sure?";
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string YesButtonText { get; set; } = "Yes";
+    [Parameter] public string NoButtonText { get; set; } = "No";
+    [Parameter] public EventCallback<bool> OnResponse { get; set; }  // Passes true for Yes, false for No
+
+    private async Task HandleYes()
+    {
+        if (OnResponse.HasDelegate)
+            await OnResponse.InvokeAsync(true);
+    }
+
+    private async Task HandleNo()
+    {
+        if (OnResponse.HasDelegate)
+            await OnResponse.InvokeAsync(false);
+    }
+}
