@@ -13,7 +13,7 @@ namespace OutsourceTracker
             builder.RootComponents.Add<HeadOutlet>("head::after");
 
             builder.Services.AddScoped<TrailerService>();
-            builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(/* builder.HostEnvironment.BaseAddress */ "https://dispatch.vandersluis.club/" ) });
+            builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("https://api.vandersluistrucking.com/") });
 
             await builder.Build().RunAsync();
         }
