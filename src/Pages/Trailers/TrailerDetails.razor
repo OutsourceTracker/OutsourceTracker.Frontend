@@ -101,7 +101,7 @@
                         <!-- Actions -->
                         <div class="d-flex flex-wrap gap-3 justify-content-end">
                             <button class="btn btn-outline-primary btn-lg px-5"
-                                    @onclick='() => Navigation.NavigateTo($"/trailers/spot/{trailer.Prefix}/{trailer.Name}")'>
+                                    @onclick='() => Navigation.NavigateTo($"/trailer/spot/{trailer.Prefix}/{trailer.Name}")'>
                                 <i class="bi bi-geo-alt-fill me-2"></i> Update Location
                             </button>
 
@@ -198,7 +198,7 @@
     private void EditTrailer()
     {
         // Navigate to edit page or open modal
-        Navigation.NavigateTo($"/trailers/edit/{Id}");
+        Navigation.NavigateTo($"/trailer/edit/{Id}");
     }
 
     private void ShowDeleteConfirm() => showDeleteConfirm = true;

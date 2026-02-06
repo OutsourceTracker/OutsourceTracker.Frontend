@@ -23,7 +23,7 @@
                             <div class="list-group-item list-group-item-action @(selectedTrailer?.Id == trailer.Id ? "active" : "")"
                                  @onclick="() => SelectTrailer(trailer)">
                                 <div class="d-flex justify-content-between">
-                                    <span>Trailer @trailer.Prefix @trailer.Name</span>
+                                    <span>@trailer.Prefix @trailer.Name</span>
                                     <span>Status: Active</span>  @* Placeholder; fetch real data *@
                                 </div>
                             </div>
@@ -142,7 +142,7 @@
 
     private async Task SpotTrailer()
     {
-        Navigation.NavigateTo($"/trailers/spot/{selectedTrailer.Prefix}/{selectedTrailer.Name}");
+        Navigation.NavigateTo($"/trailer/spot/{selectedTrailer.Prefix}/{selectedTrailer.Name}");
     }
 
     private async Task OnSpotTrailer(LocationUpdateResult result)
