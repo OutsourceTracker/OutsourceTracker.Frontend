@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using OutsourceTracker.Services;
+using OutsourceTracker.Tools;
 
 namespace OutsourceTracker
 {
@@ -13,6 +14,7 @@ namespace OutsourceTracker
             builder.RootComponents.Add<HeadOutlet>("head::after");
 
             builder.Services.AddScoped<TrailerService>();
+            builder.Services.AddScoped<IMapTool, GoogleMapsHelper>();
             builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("https://api.vandersluistrucking.com/") });
 
             await builder.Build().RunAsync();

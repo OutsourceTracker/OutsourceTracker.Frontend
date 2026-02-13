@@ -1,6 +1,8 @@
 ﻿@page "/trailer/{Id:guid}"
 @using OutsourceTracker.Models.Trailers
 @using OutsourceTracker.Services
+@using OutsourceTracker.Tools
+@using System.Text
 @inject TrailerService TrailerService
 @inject NavigationManager Navigation
 
@@ -148,7 +150,7 @@
 
 @code {
     [Parameter] public Guid Id { get; set; }
-    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private IMapTool Map { get; set; } = default!;
 
     private TrailerViewModel? trailer;  // Adjust TID type if Guid/string
     private bool isLoading = true;
@@ -177,21 +179,39 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!mapInitialized)
+        if (firstRender)
         {
-            // Initialize Leaflet map once (use JS interop)
-            if (await JS.InvokeAsync<bool>("initMap", "map"))
-            {
-                mapInitialized = true;
-                await Task.Delay(1000);
-                StateHasChanged();
-            }
+            await Map.InitializeMapAsync();
+            mapInitialized = true;
+            StateHasChanged();
         }
 
-        if (trailer != null && trailer.SpottedLatitude.HasValue && trailer.SpottedLongitude.HasValue && mapInitialized)
+        if (trailer != null && mapInitialized)
         {
-            // Update map marker for selected trailer
-            await JS.InvokeVoidAsync("updateMapMarker", trailer.SpottedLatitude.Value, trailer.SpottedLongitude.Value, trailer.SpottedAccuracy!.Value);
+            await SetTrailerMapMarker(trailer, true);
+        }
+    }
+
+    private async Task SetTrailerMapMarker(TrailerViewModel trailer, bool focus = false)
+    {
+        if (trailer.SpottedLatitude.HasValue && trailer.SpottedLongitude.HasValue)
+        {
+            StringBuilder info = new StringBuilder();
+            info.Append("<div style=\"min-width=180px;\">")
+            .AppendFormat("<strong>Name:</strong> {0}<br><br>", trailer.Prefix + trailer.Name);
+
+            info.Append("<strong>Last Spotted</strong><br>");
+
+            if (!string.IsNullOrWhiteSpace(trailer.SpottedBy)) info.AppendFormat("By: {0} | ", trailer.SpottedBy);
+            if (trailer.SpottedOn.HasValue) info.AppendFormat("On: {0} | ", trailer.SpottedOn.Value.ToLocalTime().ToString("MM/dd/yyyy HH:mm"));
+            if (trailer.SpottedAccuracy.HasValue) info.AppendFormat("Accuracy: {0}", Math.Round(trailer.SpottedAccuracy.Value, 3));
+            info.Append("</div>");
+            await Map.CreateMapMarker(trailer.Id.ToString("N"), $"{trailer.Prefix}{trailer.Name}", trailer.SpottedLatitude.Value, trailer.SpottedLongitude.Value, trailer.SpottedAccuracy.GetValueOrDefault(), info.ToString());
+
+            if (focus)
+            {
+                await Map.FocusMapMarker(trailer.Id.ToString("N"), null);
+            }
         }
     }
 
