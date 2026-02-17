@@ -64,26 +64,26 @@
                             <div class="col-md-6">
                                 <div class="border rounded-3 p-4 bg-light-subtle h-100">
                                     <h5 class="fw-bold mb-3">Last Spotted</h5>
-                                    @if (trailer.SpottedOn.HasValue)
+                                    @if (trailer.LocatedDate.HasValue)
                                     {
                                         <div class="d-flex flex-column gap-2">
                                             <div>
                                                 <span class="text-muted small">Location</span>
                                                 <div class="fs-5">
-                                                    @($"{trailer.SpottedLatitude:F6}, {trailer.SpottedLongitude:F6}")
+                                                    @($"{trailer.Location!.Value.Latitude:F6}, {trailer.Location!.Value.Longitude:F6}")
                                                 </div>
                                             </div>
                                             <div>
                                                 <span class="text-muted small">Accuracy</span>
-                                                <div class="fs-5">@(trailer.SpottedAccuracy.HasValue ? $"{trailer.SpottedAccuracy:F0} m" : "—")</div>
+                                                <div class="fs-5">@($"{trailer.Location!.Value.Accuracy:F0} m")</div>
                                             </div>
                                             <div>
                                                 <span class="text-muted small">Spotted By</span>
-                                                <div class="fs-5">@(trailer.SpottedBy ?? "—")</div>
+                                                <div class="fs-5">@(trailer.LocatedBy ?? "—")</div>
                                             </div>
                                             <div>
                                                 <span class="text-muted small">Date</span>
-                                                <div class="fs-5">@trailer.SpottedOn?.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</div>
+                                                <div class="fs-5">@trailer.LocatedDate?.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</div>
                                             </div>
                                         </div>
                                     }
@@ -150,7 +150,7 @@
 
 @code {
     [Parameter] public Guid Id { get; set; }
-    [Inject] private IMapTool Map { get; set; } = default!;
+    [Inject] private IMapService Map { get; set; } = default!;
 
     private TrailerViewModel? trailer;  // Adjust TID type if Guid/string
     private bool isLoading = true;
@@ -194,7 +194,7 @@
 
     private async Task SetTrailerMapMarker(TrailerViewModel trailer, bool focus = false)
     {
-        if (trailer.SpottedLatitude.HasValue && trailer.SpottedLongitude.HasValue)
+        if (trailer.Location.HasValue)
         {
             StringBuilder info = new StringBuilder();
             info.Append("<div style=\"min-width=180px;\">")
@@ -202,11 +202,11 @@
 
             info.Append("<strong>Last Spotted</strong><br>");
 
-            if (!string.IsNullOrWhiteSpace(trailer.SpottedBy)) info.AppendFormat("By: {0} | ", trailer.SpottedBy);
-            if (trailer.SpottedOn.HasValue) info.AppendFormat("On: {0} | ", trailer.SpottedOn.Value.ToLocalTime().ToString("MM/dd/yyyy HH:mm"));
-            if (trailer.SpottedAccuracy.HasValue) info.AppendFormat("Accuracy: {0}", Math.Round(trailer.SpottedAccuracy.Value, 3));
+            info.AppendFormat("By: {0} | ", trailer.LocatedBy);
+            info.AppendFormat("On: {0} | ", trailer.LocatedDate!.Value.ToLocalTime().ToString("MM/dd/yyyy HH:mm"));
+            info.AppendFormat("Accuracy: {0}", Math.Round(trailer.Location.Value.Accuracy, 3));
             info.Append("</div>");
-            await Map.CreateMapMarker(trailer.Id.ToString("N"), $"{trailer.Prefix}{trailer.Name}", trailer.SpottedLatitude.Value, trailer.SpottedLongitude.Value, trailer.SpottedAccuracy.GetValueOrDefault(), info.ToString());
+            await Map.CreateMapMarker(trailer.Id.ToString("N"), $"{trailer.Prefix}{trailer.Name}", trailer.Location.Value.Latitude, trailer.Location.Value.Longitude, trailer.Location.Value.Accuracy, info.ToString());
 
             if (focus)
             {
@@ -217,8 +217,7 @@
 
     private void EditTrailer()
     {
-        // Navigate to edit page or open modal
-        Navigation.NavigateTo($"/trailer/edit/{Id}");
+        Navigation.NavigateTo($"/trailers/{Id}/edit/");
     }
 
     private void ShowDeleteConfirm() => showDeleteConfirm = true;
@@ -231,7 +230,7 @@
         isDeleting = true;
         try
         {
-            await TrailerService.Delete(Id, null);  // Implement this
+            await TrailerService.Delete(Id);  // Implement this
             Navigation.NavigateTo("/trailers");
         }
         catch (Exception ex)

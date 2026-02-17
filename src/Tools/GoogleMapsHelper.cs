@@ -1,9 +1,10 @@
 ﻿using Microsoft.JSInterop;
+using OutsourceTracker.Services;
 using System.Dynamic;
 
 namespace OutsourceTracker.Tools;
 
-public class GoogleMapsHelper : IMapTool, IDisposable
+public class GoogleMapsHelper : IMapService, IDisposable
 {
     private IJSRuntime JS { get; }
     private bool MapInitialized = false;

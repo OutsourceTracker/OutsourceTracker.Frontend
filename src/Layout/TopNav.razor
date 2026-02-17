@@ -1,92 +1,117 @@
-﻿@using Microsoft.AspNetCore.Components.Routing
+﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using OutsourceTracker.Services
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
 @inject NavigationManager Navigation
 
-<nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top shadow-sm">
     <div class="container-fluid">
-        <!-- Application title/banner on the left -->
-        <a class="navbar-brand" href="/">Outsource Work Tracker</a>
+        <a class="navbar-brand fw-bold" href="/">
+            <i class="bi bi-truck me-2"></i>Outsource Tracker
+        </a>
 
-        <!-- Toggle button for responsive collapse on smaller screens -->
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
 
-        <!-- Main navigation items -->
         <div class="collapse navbar-collapse" id="navbarNav">
+            <!-- Left navigation (your existing menus) -->
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <!-- Home -->
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Home</NavLink>
-                </li>
+                <li class="nav-item"><NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Home</NavLink></li>
 
-                <!-- Trailers Dropdown -->
+                <!-- Trailers -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="trailersDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Trailers
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="trailersDropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Trailers</a>
+                    <ul class="dropdown-menu">
                         <li><NavLink class="dropdown-item" href="/trailers/">Manage Trailers</NavLink></li>
                         <li><NavLink class="dropdown-item" href="/trailer/create">Create Trailer</NavLink></li>
                         <li><NavLink class="dropdown-item" href="/trailer/spot">Spot Trailer</NavLink></li>
                     </ul>
                 </li>
 
-                <!-- Tractors Dropdown -->
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="tractorsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Tractors
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="tractorsDropdown">
-                        <li><NavLink class="dropdown-item" href="/tractors/manage">Manage Tractors</NavLink></li>
-                        <li><NavLink class="dropdown-item" href="/tractors/create">Create Tractor</NavLink></li>
-                    </ul>
-                </li>
-
-                <!-- Drivers Dropdown -->
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="driversDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Drivers
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="driversDropdown">
-                        <li><NavLink class="dropdown-item" href="/drivers/manage">Manage Drivers</NavLink></li>
-                        <li><NavLink class="dropdown-item" href="/drivers/create">Create Driver</NavLink></li>
-                    </ul>
-                </li>
-
-                <!-- Routes Dropdown -->
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="routesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Routes
-                    </a>
-                    <ul class="dropdown-menu" aria-labelledby="routesDropdown">
-                        <li><NavLink class="dropdown-item" href="/routes/manage">Manage Routes</NavLink></li>
-                        <li><NavLink class="dropdown-item" href="/routes/create">Create Route</NavLink></li>
-                        <li><NavLink class="dropdown-item" href="/routes/dispatch">Dispatch Route</NavLink></li>
-                    </ul>
-                </li>
+                <!-- Add your other dropdowns (Tractors, Drivers, Routes) here the same way -->
             </ul>
 
-            <!-- Profile on the right -->
-            <ul class="navbar-nav ms-auto">
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Profile
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="profileDropdown">
-                        <!-- Placeholder items; integrate with auth providers (Microsoft 365, Microsoft, Google) as needed -->
-                        <li><a class="dropdown-item" href="/profile">View Profile</a></li>
-                        <li><a class="dropdown-item" href="/settings">Settings</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="/logout">Logout</a></li>
-                    </ul>
-                </li>
-            </ul>
+            <!-- Profile with Avatar from Microsoft claims -->
+            <AuthorizeView>
+                <Authorized>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
+                            <img src="@AvatarUrl" class="rounded-circle border border-light" width="32" height="32" alt="Avatar" />
+                            <span class="fw-semibold d-none d-md-inline">@DisplayName</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li class="dropdown-header">
+                                <strong>@DisplayName</strong><br />
+                                <small class="text-muted">@Email</small>
+                            </li>
+                            <li><hr class="dropdown-divider" /></li>
+                            <li><NavLink class="dropdown-item" href="/profile">View Profile</NavLink></li>
+                            <li><NavLink class="dropdown-item" href="/settings">Settings</NavLink></li>
+                            <li><hr class="dropdown-divider" /></li>
+                            <li><a class="dropdown-item text-danger" @onclick="Logout">Logout</a></li>
+                        </ul>
+                    </li>
+                </Authorized>
+            </AuthorizeView>
         </div>
     </div>
 </nav>
 
 @code {
-    // Optional: Add JS interop for custom animations if Bootstrap's built-in fade/transition isn't sufficient
-    // For example, to enhance dropdown animations, but Bootstrap handles this via CSS/JS already.
-    // If needed, inject IJSRuntime and call custom JS functions.
+    private string DisplayName = "User";
+    private string Email = "";
+    private string AvatarUrl = "https://ui-avatars.com/api/?name=User&background=0d6efd&color=fff&size=128&bold=true&rounded=true";
+    private bool IsAuthenticated = false;
+
+    [Inject] private UserPhotoService PhotoService { get; init; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = state.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            IsAuthenticated = true;
+            DisplayName = user.FindFirst("name")?.Value
+                       ?? user.FindFirst(ClaimTypes.Name)?.Value
+                       ?? "User";
+
+            Email = user.FindFirst(ClaimTypes.Email)?.Value
+                 ?? user.FindFirst("preferred_username")?.Value
+                 ?? "";
+
+            string name = Uri.EscapeDataString(DisplayName);
+            AvatarUrl = $"https://ui-avatars.com/api/?name={name}&background=0d6efd&color=fff&size=128&bold=true&rounded=true";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && IsAuthenticated)
+        {
+            try
+            {
+                var realAvatar = await PhotoService.GetAvatarUrlAsync(DisplayName);
+                if (realAvatar != AvatarUrl)   // only update if different
+                {
+                    AvatarUrl = realAvatar;
+                    StateHasChanged();
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private async Task Logout()
+    {
+        await PhotoService.ClearCacheAsync();
+        Navigation.NavigateToLogout("/authentication/logout");
+    }
 }

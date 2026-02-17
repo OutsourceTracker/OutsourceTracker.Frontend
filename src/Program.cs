@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using OutsourceTracker.Equipment;
+using OutsourceTracker.Models.Trailers;
 using OutsourceTracker.Services;
+using OutsourceTracker.Services.ModelService;
 using OutsourceTracker.Tools;
 
 namespace OutsourceTracker
@@ -13,10 +16,48 @@ namespace OutsourceTracker
             builder.RootComponents.Add<App>("#app");
             builder.RootComponents.Add<HeadOutlet>("head::after");
 
-            builder.Services.AddScoped<TrailerService>();
-            builder.Services.AddScoped<IMapTool, GoogleMapsHelper>();
-            builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("https://api.vandersluistrucking.com/") });
+            builder.Services.AddMsalAuthentication(options =>
+            {
+                builder.Configuration.Bind("AzureAd", options.ProviderOptions.Authentication);
+                options.ProviderOptions.DefaultAccessTokenScopes.Add("openid");
+                options.ProviderOptions.DefaultAccessTokenScopes.Add("profile");
+                options.ProviderOptions.DefaultAccessTokenScopes.Add("email");
+                options.ProviderOptions.DefaultAccessTokenScopes.Add("api://51032fa1-b18c-464f-9a43-34819040dfa7/access_as_user");
+                options.ProviderOptions.LoginMode = "redirect";
+                options.ProviderOptions.Cache.StoreAuthStateInCookie = true;
+                options.ProviderOptions.Authentication.PostLogoutRedirectUri = "/login";
+            });
 
+            builder.Services
+                .AddScoped<ClientHeaderHandler>()
+                .AddHttpClient("API", client =>
+                {
+
+                    if (builder.HostEnvironment.IsDevelopment())
+                    {
+                        client.BaseAddress = new Uri("https://localhost:7253/");
+                    }
+                    else
+                    {
+                        client.BaseAddress = new Uri("https://api.vandersluistrucking.com/");
+                    }
+                })
+                .AddHttpMessageHandler<ClientHeaderHandler>();
+
+            builder.Services.AddHttpClient("Graph", client =>
+            {
+                client.BaseAddress = new Uri("https://graph.microsoft.com");
+            });
+            builder.Services.AddScoped<UserPhotoService>();
+            builder.Services.AddScoped<UserService>();
+
+            builder.Services.AddScoped<TrailerService>()
+                .AddScoped<IModelCreateService<TrailerViewModel>>(sp => sp.GetRequiredService<TrailerService>())
+                .AddScoped<IModelDeleteService<TrailerViewModel>>(sp => sp.GetRequiredService<TrailerService>())
+                .AddScoped<IModelLookupService<TrailerViewModel>>(sp => sp.GetRequiredService<TrailerService>())
+                .AddScoped<IModelUpdateService<TrailerViewModel>>(sp => sp.GetRequiredService<TrailerService>())
+                .AddScoped<IEquipmentLocationService<TrailerViewModel>>(sp => sp.GetRequiredService<TrailerService>());
+            builder.Services.AddScoped<IMapService, GoogleMapsHelper>();
             await builder.Build().RunAsync();
         }
     }
