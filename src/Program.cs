@@ -33,14 +33,15 @@ namespace OutsourceTracker
                 .AddHttpClient("API", client =>
                 {
 
-                    if (builder.HostEnvironment.IsDevelopment())
-                    {
-                        client.BaseAddress = new Uri("https://localhost:7253/");
-                    }
-                    else
-                    {
-                        client.BaseAddress = new Uri("https://api.vandersluistrucking.com/");
-                    }
+                    //if (builder.HostEnvironment.IsDevelopment())
+                    //{
+                    //    client.BaseAddress = new Uri("https://localhost:7253/");
+                    //}
+                    //else
+                    //{
+                    //    client.BaseAddress = new Uri("https://api.vandersluistrucking.com/");
+                    //}
+                    client.BaseAddress = new Uri("https://api.vandersluistrucking.com/");
                 })
                 .AddHttpMessageHandler<ClientHeaderHandler>();
 

@@ -188,6 +188,7 @@
 
         if (trailer != null && mapInitialized)
         {
+            await Map.ClearMapMarkers();
             await SetTrailerMapMarker(trailer, true);
         }
     }
