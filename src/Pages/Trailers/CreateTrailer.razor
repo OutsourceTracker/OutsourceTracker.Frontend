@@ -1,6 +1,7 @@
 ﻿@page "/trailer/create"
-@using OutsourceTracker.ModelService.Requests.Trailers
+@using OutsourceTracker.Models.Trailers
 @using OutsourceTracker.Services
+@using OutsourceTracker.Services.ModelService
 
 <PageTitle>New Trailer</PageTitle>
 
@@ -92,12 +93,13 @@
 </div>
 
 @code {
-    private TrailerCreateRequest request = new();
+    private TrailerCreateObject request = new();
     private bool isSubmitting = false;
     private string? message;
     private string? messageType; // "success" or "danger"
 
-    [Inject] private TrailerService DataContext { get; set; } = default!;
+    [Inject] private IModelCreateService<TrailerViewModel> CreateService { get; init; } = default!;
+    [Inject] private IModelUpdateService<TrailerViewModel> UpdateService { get; init; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
 
     private string GetCombinedId()
@@ -116,14 +118,39 @@
 
         try
         {
-            Guid id = await DataContext.Create(request);
+            if (request == null)
+            {
+                message = "Request object is null";
+                messageType = "danger";
+                return;
+            }
+            else if (string.IsNullOrWhiteSpace(request.Prefix))
+            {
+                message = "Missing required field: Prefix";
+                messageType = "danger";
+                return;
+            }
+            else if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                message = "Missing required field: Name";
+                messageType = "danger";
+                return;
+            }
 
-            message = "Trailer created successfully!";
-            messageType = "success";
+            Guid? id = await CreateService.Create();
 
-            // Auto-redirect after short delay
-            await Task.Delay(1800);
-            Navigation.NavigateTo($"/trailer/{id}");
+            if (!id.HasValue)
+            {
+                message = "API service didn't return a ID";
+                messageType = "danger";
+            }
+            else
+            {
+                await UpdateService.Update(id.Value, request);
+                message = "Trailer created successfully!";
+                messageType = "success";
+                Navigation.NavigateTo($"/trailer/{id}");
+            }            
         }
         catch (Exception ex)
         {
@@ -135,5 +162,12 @@
             isSubmitting = false;
             StateHasChanged();
         }
+    }
+
+    private class TrailerCreateObject
+    {
+        public string Prefix { get; set; }
+
+        public string Name { get; set; }
     }
 }

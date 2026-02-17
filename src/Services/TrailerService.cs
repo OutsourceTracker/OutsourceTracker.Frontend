@@ -1,21 +1,30 @@
-﻿using OutsourceTracker.Models.Trailers;
-using OutsourceTracker.ModelService;
-using OutsourceTracker.ModelService.Requests;
-using OutsourceTracker.ModelService.Requests.Trailers;
+﻿using OutsourceTracker.Equipment;
+using OutsourceTracker.Geolocation;
+using OutsourceTracker.Models.Trailers;
+using OutsourceTracker.Services.ModelService;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 
 namespace OutsourceTracker.Services;
 
-public class TrailerService : IModelService<Guid, TrailerViewModel, TrailerFindRequest>, IWritableModelService<Guid, TrailerViewModel, TrailerCreateRequest, TrailerUpdateRequest, DeleteRequest>
+public class TrailerService : IModelCreateService<TrailerViewModel>, IModelLookupService<TrailerViewModel>, IModelDeleteService<TrailerViewModel>, IModelUpdateService<TrailerViewModel>, IEquipmentLocationService<TrailerViewModel>
 {
     protected HttpClient Client { get; }
     protected ILogger Logger { get; }
 
-    public TrailerService(HttpClient client, ILogger<TrailerService> logger)
+    public TrailerService(IHttpClientFactory http, ILogger<TrailerService> logger)
     {
-        Client = client;
+        Client = http.CreateClient("API");
         Logger = logger;
+    }
+
+    public async Task<Guid?> Create(CancellationToken cancellationToken = default)
+    {
+        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Post, "trailers");
+        HttpResponseMessage response = await Client.SendAsync(message, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        CreateResponse? r = await response.Content.ReadFromJsonAsync<CreateResponse>(cancellationToken: cancellationToken);
+        return r.Value.Id;
     }
 
     public async Task<TrailerViewModel?> Get(Guid id, CancellationToken cancellationToken = default)
@@ -25,31 +34,31 @@ public class TrailerService : IModelService<Guid, TrailerViewModel, TrailerFindR
             throw new ArgumentException("Value cannot be empty.", nameof(id));
         }
 
-        return await Client.GetFromJsonAsync<TrailerViewModel>($"trailer/{id}", cancellationToken);
+        return await Client.GetFromJsonAsync<TrailerViewModel>($"trailers/{id}", cancellationToken);
     }
 
-    public async IAsyncEnumerable<TrailerViewModel> Find(TrailerFindRequest? request = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<TrailerViewModel> Search(object? searchOptions = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Get, "trailer");
+        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Get, "trailers");
 
-        if (request != null)
-        {
-            var query = System.Web.HttpUtility.ParseQueryString(string.Empty);
-            if (!string.IsNullOrWhiteSpace(request.Prefix))
-            {
-                query["prefix"] = request.Prefix;
-            }
-            if (!string.IsNullOrWhiteSpace(request.Name))
-            {
-                query["name"] = request.Name;
-            }
-            if (!string.IsNullOrWhiteSpace(request.SpottedBy))
-            {
-                query["spottedBy"] = request.SpottedBy;
-            }
-            string queryString = query.ToString() ?? string.Empty;
-            message.RequestUri = new Uri($"{message.RequestUri}?{queryString}", UriKind.Relative);
-        }
+        //if (query != null)
+        //{
+        //    var query = System.Web.HttpUtility.ParseQueryString(string.Empty);
+        //    if (!string.IsNullOrWhiteSpace(request.Prefix))
+        //    {
+        //        query["prefix"] = request.Prefix;
+        //    }
+        //    if (!string.IsNullOrWhiteSpace(request.Name))
+        //    {
+        //        query["name"] = request.Name;
+        //    }
+        //    if (!string.IsNullOrWhiteSpace(request.SpottedBy))
+        //    {
+        //        query["spottedBy"] = request.SpottedBy;
+        //    }
+        //    string queryString = query.ToString() ?? string.Empty;
+        //    message.RequestUri = new Uri($"{message.RequestUri}?{queryString}", UriKind.Relative);
+        //}
 
         HttpResponseMessage response = await Client.SendAsync(message, cancellationToken);
         response.EnsureSuccessStatusCode();
@@ -61,27 +70,18 @@ public class TrailerService : IModelService<Guid, TrailerViewModel, TrailerFindR
                 yield return item;
             }
         }
-
     }
 
-    public async Task<Guid> Create(TrailerCreateRequest? request, CancellationToken cancellationToken = default)
+    public async Task<bool> Delete(Guid id, CancellationToken cancellationToken = default)
     {
-        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Post, "trailer");
-
-        if (request != null)
-        {
-            message.Content = JsonContent.Create(request);
-        }
-
+        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Delete, $"trailers/{id}");
         HttpResponseMessage response = await Client.SendAsync(message, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        CreateResponse r = await response.Content.ReadFromJsonAsync<CreateResponse>(cancellationToken: cancellationToken);
-        return r.Value!.Value;
+        return response.IsSuccessStatusCode;
     }
 
-    public async Task<TrailerViewModel?> Update(Guid id, TrailerUpdateRequest? request, CancellationToken cancellationToken = default)
+    public async Task<TrailerViewModel?> Update(Guid id, object request, CancellationToken cancellationToken = default)
     {
-        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Put, $"trailer/{id}");
+        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Put, $"trailers/{id}");
 
         if (request != null)
         {
@@ -93,21 +93,15 @@ public class TrailerService : IModelService<Guid, TrailerViewModel, TrailerFindR
         return await response.Content.ReadFromJsonAsync<TrailerViewModel>(cancellationToken: cancellationToken);
     }
 
-    public async ValueTask<bool> Delete(Guid id, DeleteRequest? request, CancellationToken cancellationToken = default)
+    public async Task UpdateLocation(Guid id, MapCoordinates mapCoordinates, CancellationToken cancellationToken = default)
     {
-        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Delete, $"trailer/{id}");
-
-        if (request != null)
-        {
-            message.Content = JsonContent.Create(request);
-        }
-
-        HttpResponseMessage response = await Client.SendAsync(message, cancellationToken);
-        return response.IsSuccessStatusCode;
+        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Put, $"/trailers/{id}/spot");
+        message.Content = JsonContent.Create(mapCoordinates);
+        await Client.SendAsync(message);
     }
 
     private struct CreateResponse
     {
-        public Guid? Value { get; set; }
+        public Guid? Id { get; set; }
     }
 }

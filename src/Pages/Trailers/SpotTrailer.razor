@@ -1,8 +1,10 @@
 ﻿@page "/trailer/spot"
 @page "/trailer/spot/{Prefix}/{Trailer}"
-@using OutsourceTracker.ModelService.Requests.Trailers
+@using OutsourceTracker.Equipment
+@using OutsourceTracker.Geolocation
 @using OutsourceTracker.Models.Trailers
 @using OutsourceTracker.Services
+@using OutsourceTracker.Services.ModelService
 
 <PageTitle>Spot Trailer Location</PageTitle>
 
@@ -110,13 +112,14 @@
 </div>
 
 @code {
-    private TrailerUpdateRequest request = new();  // Create this model below
+    private EquipmentSpotRequest request = new();  // Create this model below
     private bool isSubmitting = false;
     private bool isLocating = false;
     private string? message;
     private string? messageType; // success / danger
 
-    [Inject] private TrailerService DataContext { get; set; } = default!;
+    [Inject] private IEquipmentLocationService<TrailerViewModel> LocationService { get; set; } = default!;
+    [Inject] private IModelLookupService<TrailerViewModel> LookupService { get; init; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Parameter] public string? Prefix { get; set; }
@@ -124,7 +127,6 @@
 
     protected override void OnParametersSet()
     {
-        base.OnParametersSet();
         request.Prefix = Prefix;
         request.Name = Trailer;
     }
@@ -141,7 +143,7 @@
             request.Latitude = position.Coords.Latitude;
             request.Longitude = position.Coords.Longitude;
             request.Accuracy = position.Coords.Accuracy;
-            message = "GPS location captured successfully!";
+            message = $"GPS location captured successfully! | Accuracy: {Math.Abs(request.Accuracy).ToString("F6")}";
             messageType = "success";
         }
         catch (JSException ex)
@@ -172,28 +174,22 @@
 
         try
         {
-            TrailerViewModel? trailer = await DataContext.Find(new TrailerFindRequest
+            TrailerViewModel? lookup = await LookupService.Search(new
             {
-                Prefix = request.Prefix,
-                Name = request.Name
-            }).FirstOrDefaultAsync();
+                PrefixEquals = request.Prefix,
+                NameEquals = request.Name
+            }).FirstOrDefaultAsync(t => t.Prefix == request.Prefix && t.Name == request.Name);
 
-            if (trailer == null || !trailer.Prefix.Equals(request.Prefix, StringComparison.CurrentCultureIgnoreCase) || !trailer.Name.Equals(request.Name, StringComparison.OrdinalIgnoreCase))
+            if (lookup == null)
             {
-                throw new KeyNotFoundException($"Trailer not found with identifier {request.Prefix} {request.Name}");
+                message = "Trailer not found";
+                messageType = "danger";
+                StateHasChanged();
+                return;
             }
 
-            request.Prefix = null;
-            request.Name = null;
-            request.SpottedBy = "Austin Vandersluis";
-
-            await DataContext.Update(trailer.Id, request);  // Adjust method name to your service
-
-            message = "Trailer location updated successfully!";
-            messageType = "success";
-
-            await Task.Delay(1800);
-            Navigation.NavigateTo($"/trailer/{trailer.Id}");
+            await LocationService.UpdateLocation(lookup.Id, new MapCoordinates(request.Latitude, request.Longitude, request.Accuracy));
+            Navigation.NavigateTo($"/trailers/{lookup.Id}");
         }
         catch (Exception ex)
         {
@@ -211,5 +207,18 @@
     {
         message = null;
         messageType = null;
+    }
+
+    private class EquipmentSpotRequest
+    {
+        public string Prefix { get; set; }
+
+        public string Name { get; set; }
+
+        public double Latitude { get; set; }
+
+        public double Longitude { get; set; }
+
+        public double Accuracy { get; set; }
     }
 }

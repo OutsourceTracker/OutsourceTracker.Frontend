@@ -1,20 +1,33 @@
-﻿namespace OutsourceTracker.Models.Trailers;
+﻿using OutsourceTracker.Equipment;
+using OutsourceTracker.Equipment.Trailers;
+using OutsourceTracker.Geolocation;
+using System.Text.Json.Serialization;
 
-public class TrailerViewModel : ICommericalTrailer<Guid>
+namespace OutsourceTracker.Models.Trailers;
+
+public class TrailerViewModel : ITrailer<Guid>
 {
     public Guid Id { get; set; }
 
-    public string Name { get; set; }
-
     public string Prefix { get; set; }
 
-    public double? SpottedLatitude { get; set; }
+    public string Name { get; set; }
 
-    public double? SpottedLongitude { get; set; }
+    [JsonIgnore]
+    public string FullName => Prefix + Name;
 
-    public double? SpottedAccuracy { get; set; }
+    public TrailerType Type { get; set; }
 
-    public string? SpottedBy { get; set; }
+    public EquipmentState State { get; set; }
 
-    public DateTimeOffset? SpottedOn { get; set; }
+    public Guid? AccountId { get; set; }
+
+    public DateTimeOffset CreatedOn { get; set; }
+
+    public MapCoordinates? Location { get; set; }
+
+    public string? LocatedBy { get; set; }
+
+    public DateTimeOffset? LocatedDate { get; set; }
+    
 }

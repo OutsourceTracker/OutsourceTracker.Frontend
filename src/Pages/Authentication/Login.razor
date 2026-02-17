@@ -1,0 +1,45 @@
+﻿@page "/login"
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using OutsourceTracker.Services
+@layout EmptyLayout
+
+<div class="container d-flex align-items-center justify-content-center min-vh-100 bg-light">
+    <div class="card shadow-lg border-0" style="max-width: 420px; width: 100%;">
+        <div class="card-body p-5">
+            <div class="text-center mb-4">
+                <h2 class="fw-bold text-primary">Outsource Tracker</h2>
+                <p class="text-muted">Sign in with your Microsoft account</p>
+            </div>
+
+            <button @onclick="LoginWithMicrosoft"
+                    class="btn btn-lg btn-primary w-100 d-flex align-items-center justify-content-center gap-3 shadow-sm">
+                <img src="https://learn.microsoft.com/en-us/entra/identity-platform/media/howto-add-branding-in-apps/ms-symbollockup_mssymbol_19.svg"
+                     width="28" height="28" />
+                <span class="fw-semibold">Sign in with Microsoft</span>
+            </button>
+
+            <div class="text-center mt-4 text-muted small">
+                Secure • Enterprise-ready • Powered by Microsoft Entra ID
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Inject] UserService User { get; init; }
+    [Inject] NavigationManager Nav { get; init; }
+    [Inject] IJSRuntime JS { get; init; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var claim = await User.GetClaim();
+
+        if (claim.Identity?.IsAuthenticated == true)
+        {
+            Nav.NavigateTo("/", forceLoad: true);
+        }
+    }
+
+    private void LoginWithMicrosoft() => Nav.NavigateToLogin("/authentication/login");
+}

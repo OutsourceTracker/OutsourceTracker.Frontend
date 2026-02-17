@@ -1,0 +1,26 @@
+﻿@page "/authentication/{action}"
+@layout EmptyLayout
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using OutsourceTracker.Services
+
+<RemoteAuthenticatorView Action="@Action" />
+
+@code {
+    [Parameter]
+    public string Action { get; set; } = string.Empty;
+
+    [Inject] UserService User { get; init; }
+
+    [Inject] IJSRuntime JS { get; init; }
+
+    protected override void OnParametersSet()
+    {
+        JS.InvokeVoidAsync("console.log", User.IsAuthenticated, User.AuthPending);
+        switch (Action)
+        {
+            case "login":
+                User.AuthPending = true;
+                break;
+        }
+    }
+}

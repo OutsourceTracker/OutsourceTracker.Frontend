@@ -6,6 +6,9 @@ window.hideBootstrapModal = (id) => {
     bootstrap.Modal.getInstance(document.getElementById(id))?.hide();
 };
 
+window.getClientTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+window.getClientLanguage = () => navigator.language || 'en-US';
+
 window.navigator = window.navigator || {};
 navigator.geolocation = navigator.geolocation || {};
 navigator.geolocation.getCurrentPositionWrapper = function () {
