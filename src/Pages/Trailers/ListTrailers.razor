@@ -24,7 +24,7 @@
                                  @onclick="() => SelectTrailer(trailer)">
                                 <div class="d-flex justify-content-between">
                                     <span>@trailer.Prefix @trailer.Name</span>
-                                    <span>Status: Active</span>  @* Placeholder; fetch real data *@
+                                    <span>Status: @(trailer.State.ToString())</span>  @* Placeholder; fetch real data *@
                                 </div>
                             </div>
                         }
@@ -114,14 +114,6 @@
         {
             selectedTrailer = trailers.Find(t => t.Id == TrailerId.Value);
         }
-
-        if (mapInitialized)
-        {
-            foreach (var trailer in trailers)
-            {
-                await SetTrailerMapMarker(trailer, false);
-            }
-        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -138,11 +130,6 @@
                     await SetTrailerMapMarker(trailer, false);
                 }
             }
-        }
-
-        if (selectedTrailer != null)
-        {
-            await Map.FocusMapMarker(selectedTrailer.Id.ToString("N"), null);
         }
     }
 
@@ -171,9 +158,13 @@
 
     private async Task SelectTrailer(TrailerViewModel trailer)
     {
-        selectedTrailer = trailer;
-        await Map.FocusMapMarker(trailer.Id.ToString("N"), null);
-        StateHasChanged();
+        if (selectedTrailer != trailer)
+        {
+            await Map.ClearMapMarkers();
+            await SetTrailerMapMarker(trailer, true);
+            selectedTrailer = trailer;
+            StateHasChanged();
+        }
     }
 
     private async Task ShowTrailerDetails()

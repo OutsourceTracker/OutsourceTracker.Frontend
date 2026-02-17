@@ -45,7 +45,7 @@ public class GoogleMapsHelper : IMapService, IDisposable
             }
         }
 
-        if (await JS.InvokeAsync<bool>("initMap", new object[] { ContainerId, (object)args }))
+        if (await JS.InvokeAsync<bool>("map.initialize", new object[] { ContainerId, (object)args }))
         {
             MapInitialized = true;
             return true;
@@ -57,7 +57,7 @@ public class GoogleMapsHelper : IMapService, IDisposable
     public async Task<string> CreateMapMarker(string markerId, string title, double lat, double lng, double accuracy = 0, string? infoHtml = null)
     {
         // No need for MapInitialized check here; JS handles pending markers
-        return await JS.InvokeAsync<string>("createMapMarker", markerId, title, lat, lng, accuracy, infoHtml);
+        return await JS.InvokeAsync<string>("map.createMapMarker", markerId, title, lat, lng, accuracy, infoHtml);
     }
 
     public async Task DeleteMapMarker(string markerId)
@@ -67,13 +67,13 @@ public class GoogleMapsHelper : IMapService, IDisposable
             // Optionally handle, but JS can delete from storage
             return;
         }
-        await JS.InvokeVoidAsync("deleteMapMarker", markerId);
+        await JS.InvokeVoidAsync("map.deleteMapMarker", markerId);
     }
 
     public async Task EditMapMarker(string markerId, string title, double lat, double lng, double accuracy = 0, string? infoHtml = null)
     {
         // No need for MapInitialized check; JS handles updates to params
-        await JS.InvokeVoidAsync("editMapMarker", markerId, title, lat, lng, accuracy, infoHtml);
+        await JS.InvokeVoidAsync("map.editMapMarker", markerId, title, lat, lng, accuracy, infoHtml);
     }
 
     public async Task FocusMapMarker(string markerId, int? zoom = null)
@@ -82,7 +82,17 @@ public class GoogleMapsHelper : IMapService, IDisposable
         {
             throw new InvalidOperationException("Map not initialized");
         }
-        await JS.InvokeVoidAsync("focusMapMarker", markerId, zoom);
+        await JS.InvokeVoidAsync("map.focusMapMarker", markerId, zoom);
+    }
+
+    public async Task ClearMapMarkers()
+    {
+        if (!MapInitialized)
+        {
+            throw new InvalidOperationException("Map not initialized");
+        }
+
+        await JS.InvokeVoidAsync("map.clearMapMarkers");
     }
 
     public void Dispose()
