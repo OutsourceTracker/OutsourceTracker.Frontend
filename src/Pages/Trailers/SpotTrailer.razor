@@ -118,8 +118,7 @@
     private string? message;
     private string? messageType; // success / danger
 
-    [Inject] private ITrackableLocationService<TrailerViewModel> LocationService { get; set; } = default!;
-    [Inject] private IModelLookupService<TrailerViewModel> LookupService { get; init; } = default!;
+    [Inject] private TrailerService TrailerService { get; set; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Parameter] public string? Prefix { get; set; }
@@ -174,7 +173,7 @@
 
         try
         {
-            TrailerViewModel? lookup = await LookupService.Search(new
+            TrailerViewModel? lookup = await TrailerService.Search(new
             {
                 PrefixEquals = request.Prefix,
                 NameEquals = request.Name
@@ -188,7 +187,8 @@
                 return;
             }
 
-            await LocationService.UpdateLocation(lookup.Id, new Vector2(request.Latitude, request.Longitude));
+            var response = await TrailerService.UpdateLocation(lookup.Id, new Vector2(request.Latitude, request.Longitude), accuracy: request.Accuracy);
+            response.EnsureSuccessStatusCode();
             Navigation.NavigateTo($"/trailers/{lookup.Id}");
         }
         catch (Exception ex)
@@ -211,9 +211,9 @@
 
     private class EquipmentSpotRequest
     {
-        public string Prefix { get; set; }
+        public string? Prefix { get; set; }
 
-        public string Name { get; set; }
+        public string? Name { get; set; }
 
         public double Latitude { get; set; }
 

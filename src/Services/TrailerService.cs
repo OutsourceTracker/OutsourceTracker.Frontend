@@ -1,5 +1,4 @@
-﻿using OutsourceTracker.Equipment;
-using OutsourceTracker.Geolocation;
+﻿using OutsourceTracker.Geolocation;
 using OutsourceTracker.Models.Trailers;
 using OutsourceTracker.Services.ModelService;
 using System.Net.Http.Json;
@@ -7,7 +6,7 @@ using System.Runtime.CompilerServices;
 
 namespace OutsourceTracker.Services;
 
-public class TrailerService : IModelCreateService<TrailerViewModel>, IModelLookupService<TrailerViewModel>, IModelDeleteService<TrailerViewModel>, IModelUpdateService<TrailerViewModel>, ITrackableLocationService<TrailerViewModel>
+public class TrailerService : IModelCreateService<TrailerViewModel, HttpResponseMessage>, IModelLookupService<TrailerViewModel>, IModelDeleteService<TrailerViewModel, HttpResponseMessage>, IModelUpdateService<TrailerViewModel, HttpResponseMessage>, ITrackableLocationService<TrailerViewModel, HttpResponseMessage>
 {
     protected HttpClient Client { get; }
     protected ILogger Logger { get; }
@@ -18,13 +17,10 @@ public class TrailerService : IModelCreateService<TrailerViewModel>, IModelLooku
         Logger = logger;
     }
 
-    public async Task<Guid?> Create(CancellationToken cancellationToken = default)
+    public async Task<HttpResponseMessage> Create(CancellationToken cancellationToken = default)
     {
         HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Post, "trailers");
-        HttpResponseMessage response = await Client.SendAsync(message, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        CreateResponse? r = await response.Content.ReadFromJsonAsync<CreateResponse>(cancellationToken: cancellationToken);
-        return r.Value.Id;
+        return await Client.SendAsync(message, cancellationToken);
     }
 
     public async Task<TrailerViewModel?> Get(Guid id, CancellationToken cancellationToken = default)
@@ -72,14 +68,13 @@ public class TrailerService : IModelCreateService<TrailerViewModel>, IModelLooku
         }
     }
 
-    public async Task<bool> Delete(Guid id, CancellationToken cancellationToken = default)
+    public async Task<HttpResponseMessage> Delete(Guid id, CancellationToken cancellationToken = default)
     {
         HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Delete, $"trailers/{id}");
-        HttpResponseMessage response = await Client.SendAsync(message, cancellationToken);
-        return response.IsSuccessStatusCode;
+        return await Client.SendAsync(message, cancellationToken);
     }
 
-    public async Task<TrailerViewModel?> Update(Guid id, object request, CancellationToken cancellationToken = default)
+    public async Task<HttpResponseMessage> Update(Guid id, object request, CancellationToken cancellationToken = default)
     {
         HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Put, $"trailers/{id}");
 
@@ -88,20 +83,20 @@ public class TrailerService : IModelCreateService<TrailerViewModel>, IModelLooku
             message.Content = JsonContent.Create(request);
         }
 
-        HttpResponseMessage response = await Client.SendAsync(message, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<TrailerViewModel>(cancellationToken: cancellationToken);
+        return await Client.SendAsync(message, cancellationToken);
     }
 
-    public async Task UpdateLocation(Guid id, Vector2 mapCoordinates, CancellationToken cancellationToken = default)
+    public async Task<HttpResponseMessage> UpdateLocation(Guid id, Vector2 mapCoordinates, double? accuracy = null, CancellationToken cancellationToken = default)
     {
-        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Put, $"/trailers/{id}/spot");
+        string messageUri = $"/trailers/{id}/spot";
+
+        if (accuracy.HasValue)
+        {
+            messageUri += $"?acc={accuracy.Value}";
+        }
+
+        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Put, messageUri);
         message.Content = JsonContent.Create(mapCoordinates);
-        await Client.SendAsync(message);
-    }
-
-    private struct CreateResponse
-    {
-        public Guid? Id { get; set; }
+        return await Client.SendAsync(message);
     }
 }
