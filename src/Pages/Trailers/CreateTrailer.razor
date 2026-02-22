@@ -98,8 +98,7 @@
     private string? message;
     private string? messageType; // "success" or "danger"
 
-    [Inject] private IModelCreateService<TrailerViewModel> CreateService { get; init; } = default!;
-    [Inject] private IModelUpdateService<TrailerViewModel> UpdateService { get; init; } = default!;
+    [Inject] private TrailerService TrailerService { get; init; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
 
     private string GetCombinedId()
@@ -137,20 +136,22 @@
                 return;
             }
 
-            Guid? id = await CreateService.Create();
+            HttpResponseMessage response = await TrailerService.Create();
+            response.EnsureSuccessStatusCode();
+            Guid? instanceId = await response.Content.ReadFromJsonAsync<Guid>();
 
-            if (!id.HasValue)
+            if (instanceId.HasValue)
             {
-                message = "API service didn't return a ID";
-                messageType = "danger";
+                await TrailerService.Update(instanceId.Value, request);
+                message = "Trailer created successfully!";
+                messageType = "success";
+                Navigation.NavigateTo($"/trailer/{instanceId}");
             }
             else
             {
-                await UpdateService.Update(id.Value, request);
-                message = "Trailer created successfully!";
-                messageType = "success";
-                Navigation.NavigateTo($"/trailer/{id}");
-            }            
+                message = "API service didn't return a valid ID";
+                messageType = "danger";
+            }
         }
         catch (Exception ex)
         {
@@ -166,8 +167,8 @@
 
     private class TrailerCreateObject
     {
-        public string Prefix { get; set; }
+        public string? Prefix { get; set; }
 
-        public string Name { get; set; }
+        public string? Name { get; set; }
     }
 }

@@ -100,15 +100,14 @@
     private bool mapInitialized = false;
     private bool showDeleteModal = false;
     private bool showSpotModal = false;
-    [Inject] private IModelLookupService<TrailerViewModel> SearchService { get; set; } = null!;
-    [Inject] private IModelDeleteService<TrailerViewModel> DeleteService { get; set; } = null!;
+    [Inject] private TrailerService TrailerService { get; set; } = null!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private IMapService Map { get; set; } = default!;
     [Parameter] public Guid? TrailerId { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        trailers = await SearchService.Search().ToListAsync();
+        trailers = await TrailerService.Search().ToListAsync();
 
         if (TrailerId.HasValue)
         {
@@ -193,9 +192,9 @@
     {
         if (confirm && selectedTrailer != null)
         {
-            bool result = await DeleteService.Delete(selectedTrailer.Id);
+            var result = await TrailerService.Delete(selectedTrailer.Id);
 
-            if (result)
+            if (result.IsSuccessStatusCode)
             {
                 trailers.Remove(selectedTrailer);
                 await Map.DeleteMapMarker(selectedTrailer.Id.ToString("N"));
