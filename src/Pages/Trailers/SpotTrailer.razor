@@ -118,7 +118,7 @@
     private string? message;
     private string? messageType; // success / danger
 
-    [Inject] private IEquipmentLocationService<TrailerViewModel> LocationService { get; set; } = default!;
+    [Inject] private ITrackableLocationService<TrailerViewModel> LocationService { get; set; } = default!;
     [Inject] private IModelLookupService<TrailerViewModel> LookupService { get; init; } = default!;
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
@@ -188,7 +188,7 @@
                 return;
             }
 
-            await LocationService.UpdateLocation(lookup.Id, new MapCoordinates(request.Latitude, request.Longitude, request.Accuracy));
+            await LocationService.UpdateLocation(lookup.Id, new Vector2(request.Latitude, request.Longitude));
             Navigation.NavigateTo($"/trailers/{lookup.Id}");
         }
         catch (Exception ex)

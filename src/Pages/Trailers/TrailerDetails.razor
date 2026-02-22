@@ -70,12 +70,12 @@
                                             <div>
                                                 <span class="text-muted small">Location</span>
                                                 <div class="fs-5">
-                                                    @($"{trailer.Location!.Value.Latitude:F6}, {trailer.Location!.Value.Longitude:F6}")
+                                                    @($"{trailer.Location!.Value.X:F6}, {trailer.Location!.Value.Y:F6}")
                                                 </div>
                                             </div>
                                             <div>
                                                 <span class="text-muted small">Accuracy</span>
-                                                <div class="fs-5">@($"{trailer.Location!.Value.Accuracy:F0} m")</div>
+                                                <div class="fs-5">@($"{trailer.LocationAccuracy:F0} m")</div>
                                             </div>
                                             <div>
                                                 <span class="text-muted small">Spotted By</span>
@@ -205,9 +205,9 @@
 
             info.AppendFormat("By: {0} | ", trailer.LocatedBy);
             info.AppendFormat("On: {0} | ", trailer.LocatedDate!.Value.ToLocalTime().ToString("MM/dd/yyyy HH:mm"));
-            info.AppendFormat("Accuracy: {0}", Math.Round(trailer.Location.Value.Accuracy, 3));
+            info.AppendFormat("Accuracy: {0}", Math.Round(trailer.LocationAccuracy.Value, 3));
             info.Append("</div>");
-            await Map.CreateMapMarker(trailer.Id.ToString("N"), $"{trailer.Prefix}{trailer.Name}", trailer.Location.Value.Latitude, trailer.Location.Value.Longitude, trailer.Location.Value.Accuracy, info.ToString());
+            await Map.CreateMapMarker(trailer.Id.ToString("N"), $"{trailer.Prefix}{trailer.Name}", trailer.Location.Value.X, trailer.Location.Value.Y, trailer.LocationAccuracy.Value, info.ToString());
 
             if (focus)
             {

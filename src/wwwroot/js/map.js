@@ -1,6 +1,4 @@
-﻿
-
-window.map = {
+﻿window.map = {
     mapInstance: null,
     mapMarkers: [],
     infoWindowOpen: null,
@@ -285,4 +283,158 @@ window.map = {
             this.deleteMapMarker(mark.id);
         })
     }
-}
+},
+    window.geofenceMap = {
+        map: null,
+        polygon: null,
+        markers: [],
+        drawing: false,
+        dotNetHelper: null,
+        closeListener: null,
+
+        init: function (dotNetRef, elementId, center) {
+            this.dotNetHelper = dotNetRef;
+
+            this.map = new google.maps.Map(document.getElementById(elementId), {
+                center: center,
+                zoom: 12,
+                mapTypeId: 'hybrid',
+                disableDefaultUI: false,
+                zoomControl: true,
+                mapTypeControl: true,
+                streetViewControl: false,
+                fullscreenControl: true,
+                mapId: "91655a72ee45e0e184bfe567"
+            });
+
+            this.map.addListener('click', (e) => {
+                if (!this.drawing) return;
+
+                const pos = e.latLng;
+                const lat = pos.lat();
+                const lng = pos.lng();
+
+                if (this.markers.length >= 3) {
+                    const firstPos = this.markers[0].position;
+                    if (firstPos.equals(pos)) return;
+                }
+
+                this.addPoint(lat, lng, pos);
+            });
+
+            this.drawing = true;
+        },
+
+        addPoint: function (lat, lng, pos) {
+            const pin = new google.maps.marker.PinElement({
+                glyph: `${this.markers.length + 1}`,
+                glyphColor: "#ffffff",
+                background: "#0d6efd",
+                borderColor: "#ffffff",
+                scale: 1.1
+            });
+
+            const marker = new google.maps.marker.AdvancedMarkerElement({
+                map: this.map,
+                position: pos,
+                content: pin.element,
+                gmpDraggable: false,
+                title: `Point ${this.markers.length + 1}`
+            });
+
+            this.markers.push(marker);
+
+            this.dotNetHelper.invokeMethodAsync('OnPointAdded', lat, lng);
+
+            if (this.markers.length === 3) {
+                if (this.closeListener) {
+                    google.maps.event.removeListener(this.closeListener);
+                }
+
+                const firstPin = new google.maps.marker.PinElement({
+                    glyph: "",
+                    background: "#198754",
+                    borderColor: "#ffffff",
+                    scale: 1.3
+                });
+
+                this.markers[0].content = firstPin.element;
+
+                this.closeListener = google.maps.event.addListener(this.markers[0], 'click', () => {
+                    this.finishPolygon();
+                });
+            }
+        },
+
+        finishPolygon: function () {
+            if (this.polygon) {
+                this.polygon.setMap(null);
+            }
+
+            const path = this.markers.map(m => m.position);
+
+            this.polygon = new google.maps.Polygon({
+                paths: path,
+                strokeColor: '#0d6efd',
+                strokeOpacity: 0.9,
+                strokeWeight: 3,
+                fillColor: '#0d6efd',
+                fillOpacity: 0.22,
+                editable: false,
+                draggable: false,
+                map: this.map
+            });
+
+            const bounds = new google.maps.LatLngBounds();
+            path.forEach(p => bounds.extend(p));
+            this.map.fitBounds(bounds);
+
+            this.dotNetHelper.invokeMethodAsync('OnPolygonClosed');
+
+            this.drawing = false;
+
+            if (this.closeListener) {
+                google.maps.event.removeListener(this.closeListener);
+                this.closeListener = null;
+            }
+        },
+
+        reset: function () {
+            if (this.polygon) {
+                this.polygon.setMap(null);
+                this.polygon = null;
+            }
+
+            this.markers.forEach(m => {
+                google.maps.event.clearInstanceListeners(m);
+                m.map = null;
+            });
+
+            this.markers = [];
+            this.drawing = true;
+
+            if (this.closeListener) {
+                google.maps.event.removeListener(this.closeListener);
+                this.closeListener = null;
+            }
+        },
+
+        cleanup: function () {
+            if (this.map) {
+                google.maps.event.clearInstanceListeners(this.map);
+            }
+            if (this.polygon) {
+                this.polygon.setMap(null);
+            }
+            this.markers.forEach(m => {
+                google.maps.event.clearInstanceListeners(m);
+                m.map = null;
+            });
+            this.markers = [];
+
+            if (this.closeListener) {
+                google.maps.event.removeListener(this.closeListener);
+                this.closeListener = null;
+            }
+        }
+    };
