@@ -1,0 +1,148 @@
+﻿@page "/zone/create"
+@using OutsourceTracker.Geolocation
+@layout MainLayout
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Create Geofence Zone</PageTitle>
+
+<div class="container py-4">
+    <h2 class="mb-4 fw-bold">Create New Geofence Zone</h2>
+
+    <div class="row g-4">
+        <!-- Form -->
+        <div class="col-lg-4">
+            <div class="card shadow border-0 h-100">
+                <div class="card-body d-flex flex-column">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Zone Name</label>
+                        <input type="text" class="form-control" @bind="ZoneName" placeholder="e.g. Yard A - North" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Instructions</label>
+                        <ul class="small text-muted mb-0">
+                            <li>Click on the map to add points</li>
+                            <li>Points are connected in order</li>
+                            <li>Click the first point again to close the polygon (or click Finish)</li>
+                            <li>Minimum 3 points required</li>
+                        </ul>
+                    </div>
+
+                    <div class="mt-auto">
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary flex-grow-1"
+                                    @onclick="FinishAndSave"
+                                    disabled="@(!CanSave)">
+                                Save Geofence
+                            </button>
+
+                            <button class="btn btn-outline-secondary"
+                                    @onclick="Reset">
+                                Reset
+                            </button>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(Message))
+                        {
+                            <div class="alert alert-info mt-3 small">@Message</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map -->
+        <div class="col-lg-8">
+            <div class="card shadow border-0">
+                <div class="card-body p-0" style="height: 580px;">
+                    <div id="map" style="width:100%; height:100%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? ZoneName { get; set; }
+    private string Message { get; set; } = "";
+    private bool CanSave => !string.IsNullOrWhiteSpace(ZoneName) && Points.Count >= 3;
+
+    private List<Vector2> Points { get; set; } = new();
+    private DotNetObjectReference<ZoneCreate>? DotNetRef;
+
+    [Inject] private IHttpClientFactory HttpClientFactory { get; init; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            DotNetRef = DotNetObjectReference.Create(this);
+
+            await JS.InvokeVoidAsync("geofenceMap.init",
+                DotNetRef,
+                "map",
+                new { lat = 47.0, lng = -122.0 });  // ← center near Eatonville, WA
+        }
+    }
+
+    [JSInvokable]
+    public void OnPointAdded(double lat, double lng)
+    {
+        Points.Add(new Vector2(lat, lng));
+        Message = $"Point added. Total: {Points.Count}";
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnPolygonClosed()
+    {
+        Message = "Polygon closed!";
+        StateHasChanged();
+    }
+
+    private async Task Reset()
+    {
+        Points.Clear();
+        ZoneName = null;
+        Message = "Map cleared. Start adding points again.";
+        await JS.InvokeVoidAsync("geofenceMap.reset");
+        StateHasChanged();
+    }
+
+    private async Task FinishAndSave()
+    {
+        if (!CanSave) return;
+
+        // TODO: Call your API to save it
+        // await TrailerService.CreateGeofenceAsync(geofence);
+        var http = HttpClientFactory.CreateClient("API");
+
+        HttpRequestMessage request = new(HttpMethod.Post, $"zone/{Uri.EscapeDataString(ZoneName!)}")
+        {
+            Content = JsonContent.Create(Points)
+        };
+
+        HttpResponseMessage response = await http.SendAsync(request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            Message = $"Geofence '{ZoneName}' with {Points.Count} points saved!";
+        }
+        else
+        {
+            Message = $"Failed to save geofence: {response.ReasonPhrase}";
+        }
+        // Optional: reset or navigate away
+        // Navigation.NavigateTo("/geofences");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (DotNetRef != null)
+        {
+            await JS.InvokeVoidAsync("geofenceMap.cleanup");
+            DotNetRef.Dispose();
+        }
+    }
+}

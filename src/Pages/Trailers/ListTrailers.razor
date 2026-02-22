@@ -57,7 +57,7 @@
                         @if (selectedTrailer.Location.HasValue)
                         {
                             <div class="row mt-2">
-                                <div class="col-12 col-md-6"><strong>Location:</strong> @(Math.Abs(selectedTrailer.Location.Value.Latitude).ToString("F6")) @(selectedTrailer.Location.Value.Latitude >= 0 ? "N" : "S") @(Math.Abs(selectedTrailer.Location.Value.Longitude).ToString("F6")) @(selectedTrailer.Location.Value.Longitude >= 0 ? "E" : "W") ± @(Math.Abs(selectedTrailer.Location.Value.Accuracy).ToString("F6")) m</div>
+                                <div class="col-12 col-md-6"><strong>Location:</strong> @(Math.Abs(selectedTrailer.Location.Value.X).ToString("F6")) @(selectedTrailer.Location.Value.X >= 0 ? "N" : "S") @(Math.Abs(selectedTrailer.Location.Value.Y).ToString("F6")) @(selectedTrailer.Location.Value.Y >= 0 ? "E" : "W") ± @(Math.Abs(selectedTrailer.LocationAccuracy!.Value).ToString("F6")) m</div>
                             </div>
                             <div class="row mt-2">
                                 @if (selectedTrailer.LocatedDate.HasValue)
@@ -130,6 +130,11 @@
                     await SetTrailerMapMarker(trailer, false);
                 }
             }
+
+            if (selectedTrailer != null)
+            {
+                await SetTrailerMapMarker(selectedTrailer, true);
+            }
         }
     }
 
@@ -145,9 +150,9 @@
 
             if (!string.IsNullOrWhiteSpace(trailer.LocatedBy)) info.AppendFormat("By: {0} | ", trailer.LocatedBy);
             if (trailer.LocatedDate.HasValue) info.AppendFormat("On: {0} | ", trailer.LocatedDate.Value.ToLocalTime().ToString("MM/dd/yyyy HH:mm"));
-            info.AppendFormat("Accuracy: {0}", Math.Round(trailer.Location.Value.Accuracy, 3));
+            info.AppendFormat("Accuracy: {0}", Math.Round(trailer.LocationAccuracy!.Value, 3));
             info.Append("</div>");
-            await Map.CreateMapMarker(trailer.Id.ToString("N"), $"{trailer.Prefix}{trailer.Name}", trailer.Location.Value.Latitude, trailer.Location.Value.Longitude, trailer.Location.Value.Accuracy, info.ToString());
+            await Map.CreateMapMarker(trailer.Id.ToString("N"), $"{trailer.Prefix}{trailer.Name}", trailer.Location.Value.X, trailer.Location.Value.Y, trailer.LocationAccuracy.Value, info.ToString());
 
             if (focus)
             {

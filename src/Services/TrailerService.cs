@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 
 namespace OutsourceTracker.Services;
 
-public class TrailerService : IModelCreateService<TrailerViewModel>, IModelLookupService<TrailerViewModel>, IModelDeleteService<TrailerViewModel>, IModelUpdateService<TrailerViewModel>, IEquipmentLocationService<TrailerViewModel>
+public class TrailerService : IModelCreateService<TrailerViewModel>, IModelLookupService<TrailerViewModel>, IModelDeleteService<TrailerViewModel>, IModelUpdateService<TrailerViewModel>, ITrackableLocationService<TrailerViewModel>
 {
     protected HttpClient Client { get; }
     protected ILogger Logger { get; }
@@ -93,7 +93,7 @@ public class TrailerService : IModelCreateService<TrailerViewModel>, IModelLooku
         return await response.Content.ReadFromJsonAsync<TrailerViewModel>(cancellationToken: cancellationToken);
     }
 
-    public async Task UpdateLocation(Guid id, MapCoordinates mapCoordinates, CancellationToken cancellationToken = default)
+    public async Task UpdateLocation(Guid id, Vector2 mapCoordinates, CancellationToken cancellationToken = default)
     {
         HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Put, $"/trailers/{id}/spot");
         message.Content = JsonContent.Create(mapCoordinates);
