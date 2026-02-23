@@ -1,5 +1,7 @@
 ﻿@page "/trailer/spot"
 @page "/trailer/spot/{Prefix}/{Trailer}"
+@attribute [Authorize(Roles = "Trailers.Write,Trailers.UpdateLocation")]
+@using Microsoft.AspNetCore.Authorization
 @using OutsourceTracker.Equipment
 @using OutsourceTracker.Geolocation
 @using OutsourceTracker.Models.Trailers
