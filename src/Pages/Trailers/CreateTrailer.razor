@@ -1,4 +1,6 @@
 ﻿@page "/trailer/create"
+@attribute [Authorize(Roles = "Trailers.Write")]
+@using Microsoft.AspNetCore.Authorization
 @using OutsourceTracker.Models.Trailers
 @using OutsourceTracker.Services
 @using OutsourceTracker.Services.ModelService

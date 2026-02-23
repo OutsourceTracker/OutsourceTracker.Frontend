@@ -1,4 +1,6 @@
 ﻿@page "/trailer/{Id:guid}"
+@attribute [Authorize(Roles = "Trailers.Read")]
+@using Microsoft.AspNetCore.Authorization
 @using OutsourceTracker.Models.Trailers
 @using OutsourceTracker.Services
 @using OutsourceTracker.Tools
