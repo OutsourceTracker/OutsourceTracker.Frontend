@@ -3,6 +3,7 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @using OutsourceTracker.Services
+@using OutsourceTracker.Authorization
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
@@ -18,52 +19,90 @@
         </button>
 
         <div class="collapse navbar-collapse" id="navbarNav">
-            <!-- Left navigation (your existing menus) -->
+            <!-- Left navigation -->
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item"><NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Home</NavLink></li>
-
-                <!-- Trailers -->
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Trailers</a>
-                    <ul class="dropdown-menu">
-                        <li><NavLink class="dropdown-item" href="/trailers/">Manage Trailers</NavLink></li>
-                        <li><NavLink class="dropdown-item" href="/trailer/create">Create Trailer</NavLink></li>
-                        <li><NavLink class="dropdown-item" href="/trailer/spot">Spot Trailer</NavLink></li>
-                    </ul>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Home</NavLink>
                 </li>
 
-                <!-- Zones -->
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Zones</a>
-                    <ul class="dropdown-menu">
-                        <li><NavLink class="dropdown-item" href="/zone/create">Create Zone</NavLink></li>
-                    </ul>
-                </li>
+                <AuthorizeView>
+                    <Authorized>
+                        <!-- Trailers -->
+                        @if (context.User.HasRolePrefix("Trailers."))
+                        {
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Trailers</a>
+                                <ul class="dropdown-menu">
+                                    @if (context.User.IsInRole(ApplicationRole.TrailerViewer))
+                                    {
+                                        <li><NavLink class="dropdown-item" href="/trailers/">Manage Trailers</NavLink></li>
+                                    }
+                                    @if (context.User.IsInRole(ApplicationRole.TrailerAdmin))
+                                    {
+                                        <li><NavLink class="dropdown-item" href="/trailer/create">Create Trailer</NavLink></li>
+                                    }
+                                    @if (context.User.IsInRole(ApplicationRole.TrailerSpotter))
+                                    {
+                                        <li><NavLink class="dropdown-item" href="/trailer/spot">Spot Trailer</NavLink></li>
+                                    }
+                                </ul>
+                            </li>
+                        }
 
-                <!-- Add your other dropdowns (Tractors, Drivers, Routes) here the same way -->
+                        <!-- Zones -->
+                        @if (context.User.HasRolePrefix("Zones."))
+                        {
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Zones</a>
+                                <ul class="dropdown-menu">
+                                    @if (context.User.IsInRole(ApplicationRole.ZoneAdmin))
+                                    {
+                                        <li><NavLink class="dropdown-item" href="/zone/create">Create Zone</NavLink></li>
+                                    }
+                                </ul>
+                            </li>
+                        }
+
+                        <!-- Add your other dropdowns (Tractors, Drivers, Routes) here the same way -->
+                    </Authorized>
+                </AuthorizeView>
             </ul>
 
-            <!-- Profile with Avatar from Microsoft claims -->
+            <!-- Right-aligned auth section -->
             <AuthorizeView>
                 <Authorized>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
-                            <img src="@AvatarUrl" class="rounded-circle border border-light" width="32" height="32" alt="Avatar" />
-                            <span class="fw-semibold d-none d-md-inline">@DisplayName</span>
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li class="dropdown-header">
-                                <strong>@DisplayName</strong><br />
-                                <small class="text-muted">@Email</small>
-                            </li>
-                            <li><hr class="dropdown-divider" /></li>
-                            <li><NavLink class="dropdown-item" href="/profile">View Profile</NavLink></li>
-                            <li><NavLink class="dropdown-item" href="/settings">Settings</NavLink></li>
-                            <li><hr class="dropdown-divider" /></li>
-                            <li><a class="dropdown-item text-danger" @onclick="Logout">Logout</a></li>
-                        </ul>
-                    </li>
+                    <!-- Profile dropdown pushed to right with gap -->
+                    <div class="ms-auto d-flex align-items-center gap-3">
+                        <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 text-white text-decoration-none"
+                               href="#" role="button" data-bs-toggle="dropdown">
+                                <img src="@AvatarUrl" class="rounded-circle border border-light" width="32" height="32" alt="Avatar" />
+                                <span class="fw-semibold d-none d-md-inline">@DisplayName</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li class="dropdown-header">
+                                    <strong>@DisplayName</strong><br />
+                                    <small class="text-muted">@Email</small>
+                                </li>
+                                <li><hr class="dropdown-divider" /></li>
+                                <li><NavLink class="dropdown-item" href="/profile">View Profile</NavLink></li>
+                                <li><NavLink class="dropdown-item" href="/settings">Settings</NavLink></li>
+                                <li><hr class="dropdown-divider" /></li>
+                                <li><a class="dropdown-item text-danger" @onclick="Logout">Logout</a></li>
+                            </ul>
+                        </div>
+                    </div>
                 </Authorized>
+
+                <NotAuthorized>
+                    <!-- Login button pushed to right -->
+                    <div class="ms-auto mt-2 mt-lg-0">
+                        <button class="btn btn-outline-light fw-semibold px-4 py-2"
+                                @onclick="LoginWithMicrosoft">
+                            <i class="bi bi-box-arrow-in-right me-2"></i>Sign in with Microsoft
+                        </button>
+                    </div>
+                </NotAuthorized>
             </AuthorizeView>
         </div>
     </div>
@@ -94,7 +133,7 @@
                  ?? "";
 
             string name = Uri.EscapeDataString(DisplayName);
-            AvatarUrl = $"https://ui-avatars.com/api/?name={name}&background=0d6efd&color=fff&size=128&bold=true&rounded=true";
+            AvatarUrl = await PhotoService.GetAvatarUrlAsync(DisplayName);
         }
     }
 
@@ -116,6 +155,8 @@
             }
         }
     }
+
+    private void LoginWithMicrosoft() => Navigation.NavigateToLogin("/authentication/login");
 
     private async Task Logout()
     {
