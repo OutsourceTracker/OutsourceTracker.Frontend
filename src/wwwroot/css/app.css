@@ -118,17 +118,21 @@ code {
     text-align: start;
 }
 
-@media (max-width: 767px) {
-    .container-fluid {
-        overflow-y: auto !important;
-        padding: 0.75rem !important;
+.trailers-page-container {
+    height: calc(100vh - 56px);
+}
+
+@media (max-width: 991.98px) {
+    .trailer-list-column {
+        border-bottom: 1px solid #dee2e6 !important;
+        max-height: 40vh;
     }
 
-    .trailer-list {
-        max-height: 192px;
+    .detail-section, .map-section {
+        min-height: 30vh;
     }
+}
 
-    .mobile-height-adjust {
-        height: 32% !important;
-    }
+#map {
+    min-height: 300px;
 }

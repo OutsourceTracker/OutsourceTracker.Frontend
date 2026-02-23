@@ -1,0 +1,67 @@
+﻿@using OutsourceTracker.Models.Trailers
+@if (Trailer is null)
+{
+    <div class="alert alert-info mb-0">
+        Select a trailer to view details
+    </div>
+}
+else
+{
+    <div class="card border shadow-sm">
+        <div class="card-body">
+            <dl class="row mb-0 small">
+                <dt class="col-5 col-sm-4">Prefix</dt>
+                <dd class="col-7 col-sm-8">@Trailer.Prefix</dd>
+
+                <dt class="col-5 col-sm-4">Number</dt>
+                <dd class="col-7 col-sm-8">@Trailer.Name</dd>
+
+                @if (Trailer.Location.HasValue)
+                {
+                    <dt class="col-5 col-sm-4">Location</dt>
+                    <dd class="col-7 col-sm-8">
+                        @(Math.Abs(Trailer.Location.Value.X).ToString("F6"))° @(Trailer.Location.Value.X >= 0 ? "N" : "S"),
+                        @(Math.Abs(Trailer.Location.Value.Y).ToString("F6"))° @(Trailer.Location.Value.Y >= 0 ? "E" : "W")
+                        ± @(Trailer.LocationAccuracy?.ToString("F0") ?? "?") m
+                    </dd>
+
+                    @if (!string.IsNullOrWhiteSpace(Trailer.ZoneName))
+                    {
+                        <dt class="col-5 col-sm-4">Zone</dt>
+                        <dd class="col-7 col-sm-8">@Trailer.ZoneName</dd>
+                    }
+
+                    <dt class="col-5 col-sm-4">Last seen</dt>
+                    <dd class="col-7 col-sm-8">
+                        @(Trailer.LocatedDate?.ToLocalTime().ToString("MMM d, yyyy h:mm tt") ?? "—")
+                    </dd>
+
+                    @if (!string.IsNullOrWhiteSpace(Trailer.LocatedBy))
+                    {
+                        <dt class="col-5 col-sm-4">Seen by</dt>
+                        <dd class="col-7 col-sm-8">@Trailer.LocatedBy</dd>
+                    }
+                }
+            </dl>
+
+            <div class="mt-4">
+                <button class="btn btn-outline-primary btn-sm me-2" @onclick="OnShowDetails">
+                    Full Details
+                </button>
+                <button class="btn btn-outline-secondary btn-sm me-2" @onclick="OnSpot">
+                    Spot Trailer
+                </button>
+                <button class="btn btn-outline-danger btn-sm" @onclick="OnDelete">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public TrailerViewModel? Trailer { get; set; }
+    [Parameter] public EventCallback OnShowDetails { get; set; }
+    [Parameter] public EventCallback OnSpot { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+}

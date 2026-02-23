@@ -2,119 +2,159 @@
 @using OutsourceTracker.Models.Trailers
 @using OutsourceTracker.Services
 @using OutsourceTracker.Tools
-@using System.Text
 @inject TrailerService TrailerService
 @inject NavigationManager Navigation
+@inject IMapService MapService
 
-<PageTitle>Trailer Details - @trailer?.Prefix-@trailer?.Name</PageTitle>
+<PageTitle>Trailer @trailer?.Prefix@trailer?.Name - Outsource Tracker</PageTitle>
 
-<div class="container my-5">
+<div class="container-fluid py-4 py-md-5 trailer-detail-page">
     <div class="row justify-content-center">
-        <div class="col-lg-10">
-            <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
-                <div class="card-header bg-info bg-gradient text-white py-4 d-flex justify-content-between align-items-center">
-                    <h3 class="mb-0 fw-semibold">Trailer Details</h3>
-                    <div class="btn-group">
-                        <a href="/trailers" class="btn btn-outline-light">Back to List</a>
+        <div class="col-xl-10 col-xxl-9">
+
+            <!-- Header Card -->
+            <div class="card shadow border-0 rounded-4 overflow-hidden mb-4">
+                <div class="card-header bg-gradient bg-primary text-white d-flex justify-content-between align-items-center py-4 px-4 px-md-5">
+                    <div>
+                        <h3 class="mb-1 fw-semibold">Trailer Details</h3>
+                        <div class="fs-5 opacity-75">@(trailer != null ? $"{trailer.Prefix}{trailer.Name}" : "Loading...")</div>
                     </div>
+                    <a href="/trailers" class="btn btn-outline-light px-4">
+                        <i class="bi bi-arrow-left me-2"></i>Back to List
+                    </a>
                 </div>
 
                 @if (isLoading)
                 {
-                    <div class="card-body text-center py-5">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
+                    <div class="card-body text-center py-5 my-5">
+                        <div class="spinner-border text-primary spinner-border-lg" role="status">
+                            <span class="visually-hidden">Loading trailer...</span>
                         </div>
-                        <p class="mt-3">Loading trailer information...</p>
+                        <h5 class="mt-4 text-muted">Loading trailer information</h5>
+                        <p class="text-muted">Please wait a moment...</p>
                     </div>
                 }
                 else if (trailer == null)
                 {
-                    <div class="card-body text-center py-5 text-danger">
-                        <h4>Trailer not found</h4>
-                        <p>The requested trailer could not be loaded.</p>
-                        <a href="/trailers" class="btn btn-outline-secondary mt-3">Return to Trailers</a>
+                    <div class="card-body text-center py-5 my-5">
+                        <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 4rem;"></i>
+                        <h4 class="mt-4 mb-3 text-danger">Trailer Not Found</h4>
+                        <p class="lead text-muted mb-4">The trailer you're looking for doesn't exist or you don't have access.</p>
+                        <a href="/trailers" class="btn btn-outline-primary btn-lg px-5">
+                            Return to Trailers List
+                        </a>
                     </div>
                 }
                 else
                 {
                     <div class="card-body p-4 p-md-5">
-                        <!-- Info Section -->
                         <div class="row g-4 mb-5">
-                            <div class="col-md-6">
-                                <div class="border rounded-3 p-4 bg-light-subtle h-100">
-                                    <h5 class="fw-bold mb-3">Identification</h5>
-                                    <div class="d-flex flex-column gap-2">
-                                        <div>
-                                            <span class="text-muted small">Prefix</span>
-                                            <div class="fs-4 fw-bold text-uppercase">@trailer.Prefix</div>
-                                        </div>
-                                        <div>
-                                            <span class="text-muted small">Number/Name</span>
-                                            <div class="fs-4 fw-bold text-uppercase">@trailer.Name</div>
-                                        </div>
-                                        <div>
-                                            <span class="text-muted small">Combined ID</span>
-                                            <div class="fs-5">@($"{trailer.Prefix} {trailer.Name}")</div>
+                            <!-- Left Column - Identification & Status -->
+                            <div class="col-lg-5">
+                                <div class="card border shadow-sm h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title fw-bold mb-4 text-primary">Identification</h5>
+                                        <div class="row g-3">
+                                            <div class="col-6">
+                                                <label class="text-muted small d-block mb-1">Prefix</label>
+                                                <div class="fs-4 fw-bold text-uppercase">@trailer.Prefix</div>
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="text-muted small d-block mb-1">Number</label>
+                                                <div class="fs-4 fw-bold text-uppercase">@trailer.Name</div>
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="text-muted small d-block mb-1">Full ID</label>
+                                                <div class="fs-5 fw-semibold">@($"{trailer.Prefix}{trailer.Name}")</div>
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="text-muted small d-block mb-1">Current State</label>
+                                                <span class="badge bg-info fs-6 px-3 py-2">@trailer.State</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="col-md-6">
-                                <div class="border rounded-3 p-4 bg-light-subtle h-100">
-                                    <h5 class="fw-bold mb-3">Last Spotted</h5>
-                                    @if (trailer.LocatedDate.HasValue)
-                                    {
-                                        <div class="d-flex flex-column gap-2">
-                                            <div>
-                                                <span class="text-muted small">Location</span>
-                                                <div class="fs-5">
-                                                    @($"{trailer.Location!.Value.X:F6}, {trailer.Location!.Value.Y:F6}")
+                            <!-- Right Column - Last Known Location -->
+                            <div class="col-lg-7">
+                                <div class="card border shadow-sm h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title fw-bold mb-4 text-primary">Last Known Location</h5>
+
+                                        @if (trailer.Location.HasValue && trailer.LocatedDate.HasValue)
+                                        {
+                                            <div class="row g-3">
+                                                <div class="col-sm-6">
+                                                    <label class="text-muted small d-block mb-1">Coordinates</label>
+                                                    <div class="fs-5">
+                                                        @(Math.Abs(trailer.Location.Value.X).ToString("F6"))° @(trailer.Location.Value.X >= 0 ? "N" : "S"),
+                                                        @(Math.Abs(trailer.Location.Value.Y).ToString("F6"))° @(trailer.Location.Value.Y >= 0 ? "E" : "W")
+                                                    </div>
+                                                </div>
+                                                <div class="col-sm-6">
+                                                    <label class="text-muted small d-block mb-1">Accuracy</label>
+                                                    <div class="fs-5">@($"{trailer.LocationAccuracy:F0} meters")</div>
+                                                </div>
+                                                <div class="col-sm-6">
+                                                    <label class="text-muted small d-block mb-1">Last Seen</label>
+                                                    <div class="fs-5">@trailer.LocatedDate.Value.ToLocalTime().ToString("MMM dd, yyyy · HH:mm")</div>
+                                                </div>
+                                                <div class="col-sm-6">
+                                                    <label class="text-muted small d-block mb-1">Spotted By</label>
+                                                    <div class="fs-5">@(trailer.LocatedBy ?? "Unknown")</div>
+                                                </div>
+                                                <div class="col-sm-6">
+                                                    <label class="text-muted small d-block mb-1">Active Zone</label>
+                                                    <div class="fs-5">@(trailer.ZoneName ?? "Not In Zone")</div>
                                                 </div>
                                             </div>
-                                            <div>
-                                                <span class="text-muted small">Accuracy</span>
-                                                <div class="fs-5">@($"{trailer.LocationAccuracy:F0} m")</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="alert alert-warning mb-0">
+                                                <i class="bi bi-info-circle me-2"></i>
+                                                No location data has been recorded for this trailer yet.
                                             </div>
-                                            <div>
-                                                <span class="text-muted small">Spotted By</span>
-                                                <div class="fs-5">@(trailer.LocatedBy ?? "—")</div>
-                                            </div>
-                                            <div>
-                                                <span class="text-muted small">Date</span>
-                                                <div class="fs-5">@trailer.LocatedDate?.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</div>
-                                            </div>
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <p class="text-muted fst-italic">No location data available yet.</p>
-                                    }
+                                        }
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Map Section -->
-                        <div class="border rounded-3 overflow-hidden mb-5 position-relative" style="height: 500px;">
-                            <div id="map" style="height: 100%; width: 100%;"></div>
+                        <!-- Map -->
+                        <div class="card border shadow-sm mb-5">
+                            <div class="card-header bg-light fw-semibold">
+                                Current / Last Known Position
+                            </div>
+                            <div class="position-relative" style="height: 500px;">
+                                <div id="map" style="height: 100%;"></div>
+
+                                @if (!trailer.Location.HasValue)
+                                {
+                                    <div class="position-absolute top-50 start-50 translate-middle text-center bg-white p-4 rounded shadow">
+                                        <i class="bi bi-geo-alt-slash fs-1 text-muted mb-3 d-block"></i>
+                                        <h5 class="text-muted">No location available</h5>
+                                    </div>
+                                }
+                            </div>
                         </div>
 
-                        <!-- Actions -->
+                        <!-- Action Buttons -->
                         <div class="d-flex flex-wrap gap-3 justify-content-end">
-                            <button class="btn btn-outline-primary btn-lg px-5"
+                            <button class="btn btn-primary btn-lg px-5"
                                     @onclick='() => Navigation.NavigateTo($"/trailer/spot/{trailer.Prefix}/{trailer.Name}")'>
-                                <i class="bi bi-geo-alt-fill me-2"></i> Update Location
+                                <i class="bi bi-geo-alt-fill me-2"></i>Update Location
                             </button>
 
-                            <button class="btn btn-outline-warning btn-lg px-5"
-                                    @onclick="EditTrailer">
-                                <i class="bi bi-pencil-square me-2"></i> Edit Details
+                            <button class="btn btn-outline-secondary btn-lg px-5"
+                                    @onclick='() => Navigation.NavigateTo($"/trailer/{Id}/edit")'>
+                                <i class="bi bi-pencil me-2"></i>Edit Trailer
                             </button>
 
                             <button class="btn btn-outline-danger btn-lg px-5"
-                                    @onclick="ShowDeleteConfirm">
-                                <i class="bi bi-trash me-2"></i> Delete Trailer
+                                    @onclick="ShowDeleteModal">
+                                <i class="bi bi-trash me-2"></i>Delete Trailer
                             </button>
                         </div>
                     </div>
@@ -124,40 +164,22 @@
     </div>
 </div>
 
-@if (showDeleteConfirm)
-{
-    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title">Confirm Deletion</h5>
-                    <button type="button" class="btn-close btn-close-white" @onclick="HideDeleteConfirm"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Are you sure you want to delete trailer <strong>@($"{trailer?.Prefix} {trailer?.Name}")</strong>?</p>
-                    <p class="text-danger fw-bold">This action cannot be undone.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="HideDeleteConfirm">Cancel</button>
-                    <button type="button" class="btn btn-danger" @onclick="DeleteTrailer" disabled="@isDeleting">
-                        @(isDeleting ? "Deleting..." : "Delete")
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
+<ConfirmationModal @bind-IsVisible="showDeleteModal"
+                   Title="Delete Trailer"
+                   YesButtonText="Delete"
+                   YesButtonClass="btn-danger"
+                   NoButtonText="Cancel"
+                   OnResponse="HandleDeleteResponse">
+    <p>Are you sure you want to permanently delete trailer <strong>@($"{trailer?.Prefix}{trailer?.Name}")</strong>?</p>
+    <p class="text-danger fw-bold mb-0">This action cannot be undone.</p>
+</ConfirmationModal>
 
 @code {
     [Parameter] public Guid Id { get; set; }
-    [Inject] private IMapService Map { get; set; } = default!;
 
-    private TrailerViewModel? trailer;  // Adjust TID type if Guid/string
+    private TrailerViewModel? trailer;
     private bool isLoading = true;
-
-    private bool showDeleteConfirm = false;
-    private bool isDeleting = false;
-    private bool mapInitialized = false;
+    private bool showDeleteModal = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -167,82 +189,72 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading trailer: {ex.Message}");
+            // You might want to add a proper error toast/notification here later
+            Console.WriteLine($"Failed to load trailer {Id}: {ex.Message}");
         }
         finally
         {
             isLoading = false;
-            StateHasChanged(); // Important: trigger render so map div appears
         }
     }
-
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            await Map.InitializeMapAsync();
-            mapInitialized = true;
+            await MapService.InitializeMapAsync();
             StateHasChanged();
+            return;
         }
 
-        if (trailer != null && mapInitialized)
+        if (trailer?.Location.HasValue == true && !firstRender)
         {
-            await Map.ClearMapMarkers();
-            await SetTrailerMapMarker(trailer, true);
+            await MapService.ClearMapMarkers();
+
+            var infoHtml = $@"
+                <div style='min-width:220px;'>
+                    <strong>{trailer.Prefix}{trailer.Name}</strong><br><br>
+                    <strong>Last spotted:</strong><br>
+                    {trailer.LocatedDate?.ToLocalTime():MMM dd, yyyy HH:mm}<br>
+                    By: {trailer.LocatedBy ?? "—"}<br>
+                    Accuracy: {trailer.LocationAccuracy:F1} m
+                </div>";
+
+            await MapService.CreateMapMarker(
+                trailer.Id.ToString("N"),
+                $"{trailer.Prefix}{trailer.Name}",
+                trailer.Location.Value.X,
+                trailer.Location.Value.Y,
+                trailer.LocationAccuracy ?? 100,
+                infoHtml);
+
+            await MapService.FocusMapMarker(trailer.Id.ToString("N"), 14); // reasonable zoom for single marker
         }
     }
 
-    private async Task SetTrailerMapMarker(TrailerViewModel trailer, bool focus = false)
+    private void ShowDeleteModal() => showDeleteModal = true;
+
+    private async Task HandleDeleteResponse(bool confirmed)
     {
-        if (trailer.Location.HasValue)
-        {
-            StringBuilder info = new StringBuilder();
-            info.Append("<div style=\"min-width=180px;\">")
-            .AppendFormat("<strong>Name:</strong> {0}<br><br>", trailer.Prefix + trailer.Name);
+        if (!confirmed || trailer == null) return;
 
-            info.Append("<strong>Last Spotted</strong><br>");
-
-            info.AppendFormat("By: {0} | ", trailer.LocatedBy);
-            info.AppendFormat("On: {0} | ", trailer.LocatedDate!.Value.ToLocalTime().ToString("MM/dd/yyyy HH:mm"));
-            info.AppendFormat("Accuracy: {0}", Math.Round(trailer.LocationAccuracy.Value, 3));
-            info.Append("</div>");
-            await Map.CreateMapMarker(trailer.Id.ToString("N"), $"{trailer.Prefix}{trailer.Name}", trailer.Location.Value.X, trailer.Location.Value.Y, trailer.LocationAccuracy.Value, info.ToString());
-
-            if (focus)
-            {
-                await Map.FocusMapMarker(trailer.Id.ToString("N"), null);
-            }
-        }
-    }
-
-    private void EditTrailer()
-    {
-        Navigation.NavigateTo($"/trailers/{Id}/edit/");
-    }
-
-    private void ShowDeleteConfirm() => showDeleteConfirm = true;
-    private void HideDeleteConfirm() => showDeleteConfirm = false;
-
-    private async Task DeleteTrailer()
-    {
-        if (trailer == null) return;
-
-        isDeleting = true;
         try
         {
-            await TrailerService.Delete(Id);  // Implement this
-            Navigation.NavigateTo("/trailers");
+            var success = await TrailerService.Delete(Id);
+            if (success.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/trailers", forceLoad: true);
+            }
+            else
+            {
+                // TODO: show error message / toast
+                Console.WriteLine("Delete returned false");
+            }
         }
         catch (Exception ex)
         {
-            // Show error
             Console.WriteLine($"Delete failed: {ex.Message}");
-        }
-        finally
-        {
-            isDeleting = false;
-            showDeleteConfirm = false;
+            // TODO: show user-facing error
         }
     }
 }

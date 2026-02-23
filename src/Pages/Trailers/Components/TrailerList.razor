@@ -1,0 +1,59 @@
+﻿@using OutsourceTracker.Models.Trailers
+<div class="flex-grow-1 overflow-auto">
+    @if (Trailers is null)
+    {
+        <div class="p-4 text-center text-muted">
+            <div class="spinner-border spinner-border-sm" role="status"></div>
+            <p class="mt-2">Loading trailers...</p>
+        </div>
+    }
+    else if (!Trailers.Any())
+    {
+        <div class="p-4 text-center text-muted">
+            No trailers found.
+        </div>
+    }
+    else
+    {
+        <div class="list-group list-group-flush">
+            @foreach (var trailer in Trailers)
+            {
+                <button type="button"
+                        class="list-group-item list-group-item-action @(SelectedId == trailer.Id ? "active" : "")"
+                        @onclick="() => OnCallback(trailer)">
+                    <div class="d-flex justify-content-between align-items-center small">
+                        <div>
+                            <strong>@trailer.Prefix@trailer.Name</strong>
+                        </div>
+                        <div class="text-end text-nowrap">
+                            <span class="badge bg-light text-dark">@trailer.State</span>
+                            @if (!string.IsNullOrWhiteSpace(trailer.ZoneName))
+                            {
+                                <span class="badge bg-info ms-1">@trailer.ZoneName</span>
+                            }
+                        </div>
+                    </div>
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<TrailerViewModel>? Trailers { get; set; }
+    [Parameter] public Guid? SelectedId { get; set; }
+    [Parameter] public EventCallback<TrailerViewModel?> OnTrailerSelected { get; set; }
+
+    public async Task RefreshAsync()
+    {
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnCallback(TrailerViewModel? trailer)
+    {
+        if (OnTrailerSelected.HasDelegate)
+        {
+            await OnTrailerSelected.InvokeAsync(trailer);
+        }
+    }
+}

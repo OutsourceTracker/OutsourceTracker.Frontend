@@ -1,45 +1,101 @@
-﻿@* ConfirmationModal.razor - Bootstrap 5 Modal *@
-
-<div class="modal fade @(IsVisible ? "show d-block" : "")" tabindex="-1" role="dialog" style="display: @(IsVisible ? "block" : "none");" aria-hidden="@(!IsVisible)">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">@Title</h5>
-                <button type="button" class="btn-close" @onclick="HandleNo" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>@Message</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" @onclick="HandleNo">@NoButtonText</button>
-                <button type="button" class="btn btn-primary" @onclick="HandleYes">@YesButtonText</button>
-            </div>
-        </div>
-    </div>
-</div>
+﻿@using Microsoft.AspNetCore.Components.Web
 
 @if (IsVisible)
 {
-    <div class="modal-backdrop fade show" @onclick="HandleNo"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog"
+         style="background-color: rgba(0,0,0,0.5);"
+         @onclick="BackdropClick">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content shadow-lg border-0 rounded-3">
+
+                <!-- Header -->
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-semibold">@(Title ?? "Confirm Action")</h5>
+                    <button type="button" class="btn-close" aria-label="Close"
+                            @onclick="() => HandleResponse(false)"></button>
+                </div>
+
+                <!-- Body -->
+                <div class="modal-body pt-2">
+                    @if (!string.IsNullOrWhiteSpace(Message))
+                    {
+                        <p class="mb-0">@Message</p>
+                    }
+                    else
+                    {
+                        @ChildContent
+                    }
+                </div>
+
+                <!-- Footer -->
+                <div class="modal-footer border-0 pt-1 gap-2">
+                    <button type="button" class="btn @NoButtonClass"
+                            @onclick="() => HandleResponse(false)">
+                        @NoButtonText
+                    </button>
+
+                    <button type="button" class="btn @YesButtonClass"
+                            @onclick="() => HandleResponse(true)">
+                        @YesButtonText
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 }
 
 @code {
-    [Parameter] public string Title { get; set; } = "Confirmation";
-    [Parameter] public string Message { get; set; } = "Are you sure?";
     [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback<bool> IsVisibleChanged { get; set; }
+
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
     [Parameter] public string YesButtonText { get; set; } = "Yes";
-    [Parameter] public string NoButtonText { get; set; } = "No";
-    [Parameter] public EventCallback<bool> OnResponse { get; set; }  // Passes true for Yes, false for No
+    [Parameter] public string NoButtonText { get; set; } = "Cancel";
 
-    private async Task HandleYes()
+    [Parameter] public string YesButtonClass { get; set; } = "btn-danger";
+    [Parameter] public string NoButtonClass { get; set; } = "btn-outline-secondary";
+
+    [Parameter] public EventCallback<bool> OnResponse { get; set; }
+
+    private async Task HandleResponse(bool confirmed)
     {
-        if (OnResponse.HasDelegate)
-            await OnResponse.InvokeAsync(true);
+        await OnResponse.InvokeAsync(confirmed);
+        await CloseAsync();
     }
 
-    private async Task HandleNo()
+    private async Task BackdropClick()
     {
-        if (OnResponse.HasDelegate)
-            await OnResponse.InvokeAsync(false);
+        // Optional: close on backdrop click (common UX)
+        // Comment out if you want to force user to click buttons
+        await CloseAsync();
     }
+
+    private async Task CloseAsync()
+    {
+        IsVisible = false;
+        await IsVisibleChanged.InvokeAsync(false);
+    }
+
+    // Optional: support ESC key close
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && IsVisible)
+        {
+            await JSRuntime.InvokeVoidAsync("addEventListener", "keydown", DotNetObjectReference.Create(this), "handleEsc");
+        }
+    }
+
+    [JSInvokable]
+    public async Task HandleEsc(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && IsVisible)
+        {
+            await CloseAsync();
+        }
+    }
+
+    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
 }

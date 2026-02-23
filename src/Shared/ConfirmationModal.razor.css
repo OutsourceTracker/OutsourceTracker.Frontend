@@ -1,0 +1,15 @@
+﻿.modal-backdrop.show {
+    opacity: 0.6 !important;
+}
+
+.modal-content {
+    border-radius: 0.75rem;
+}
+
+.modal-header {
+    border-bottom: none !important;
+}
+
+.modal-footer {
+    border-top: none !important;
+}

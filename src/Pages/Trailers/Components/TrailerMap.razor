@@ -1,0 +1,80 @@
+﻿@using OutsourceTracker.Models.Trailers
+@using OutsourceTracker.Services
+<div id="map" class="border rounded" style="height: @(Height);"></div>
+
+@code {
+    [Inject] private IMapService Map { get; set; } = null!;
+
+    [Parameter] public string Height { get; set; } = "100%";
+    [Parameter] public TrailerViewModel? SelectedTrailer { get; set; }
+    [Parameter] public List<TrailerViewModel>? AllTrailers { get; set; }
+
+    private bool _mapReady;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Map.InitializeMapAsync();
+            _mapReady = true;
+
+            if (AllTrailers != null)
+            {
+                foreach (var t in AllTrailers)
+                {
+                    await AddOrUpdateMarker(t, focus: false);
+                }
+            }
+
+            if (SelectedTrailer != null)
+            {
+                await FocusOnTrailerAsync(SelectedTrailer);
+            }
+        }
+    }
+
+    public async Task FocusOnTrailerAsync(TrailerViewModel trailer)
+    {
+        if (!_mapReady) return;
+        await AddOrUpdateMarker(trailer, focus: true);
+    }
+
+    public async Task ClearFocusAsync()
+    {
+        if (!_mapReady) return;
+        // Optional: reset zoom or center if desired
+    }
+
+    public async Task RemoveMarkerAsync(string id)
+    {
+        if (!_mapReady) return;
+        await Map.DeleteMapMarker(id);
+    }
+
+    private async Task AddOrUpdateMarker(TrailerViewModel trailer, bool focus)
+    {
+        if (!trailer.Location.HasValue) return;
+
+        var info = $@"
+            <div style='min-width:180px;'>
+                <strong>{trailer.Prefix}{trailer.Name}</strong><br><br>
+                <strong>Last spotted:</strong><br>
+                By: {trailer.LocatedBy ?? "—"}<br>
+                On: {(trailer.LocatedDate.HasValue ? trailer.LocatedDate.Value.ToLocalTime().ToString("MM/dd/yyyy HH:mm") : "—")}<br>
+                Accuracy: {Math.Round(trailer.LocationAccuracy ?? 0, 1)} m
+            </div>";
+
+        await Map.CreateMapMarker(
+            trailer.Id.ToString("N"),
+            $"{trailer.Prefix}{trailer.Name}",
+            trailer.Location.Value.X,
+            trailer.Location.Value.Y,
+            trailer.LocationAccuracy ?? 50,
+            info);
+
+        if (focus)
+        {
+            await Map.FocusMapMarker(trailer.Id.ToString("N"), zoomLevel: null);
+        }
+    }
+}

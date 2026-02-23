@@ -1,50 +1,9 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
 @inherits LayoutComponentBase
 
-@if (_isLoading)
-{
-    <!-- Nice loading screen while checking auth -->
-    <div class="min-vh-100 d-flex align-items-center justify-content-center bg-light">
-        <div class="text-center">
-            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
-            <p class="text-muted">Checking authentication...</p>
-        </div>
+<TopNav />
+<main class="main">
+    <div class="pt-5">
+        @Body
     </div>
-}
-else if (_isAuthenticated)
-{
-    <TopNav />
-    <main class="main">
-        <div class="pt-5">
-            @Body
-        </div>
-    </main>
-}
-
-
-
-@code {
-    private bool _isLoading = true;
-    private bool _isAuthenticated = false;
-    [Inject] private AuthenticationStateProvider AuthState { get; init; }
-    [Inject] private NavigationManager Navigation { get; init; }
-
-    protected override async Task OnInitializedAsync()
-    {
-        if (Navigation.Uri.Contains("/login") || Navigation.Uri.Contains("/authentication"))
-        {
-            _isLoading = true;
-            return;
-        }
-
-        var authState = await AuthState.GetAuthenticationStateAsync();
-        _isAuthenticated = authState.User.Identity?.IsAuthenticated == true;
-        _isLoading = false;
-
-        // Auto-redirect to login if not authenticated
-        if (!_isAuthenticated)
-        {
-            Navigation.NavigateTo("/login", forceLoad: true);
-        }
-    }
-}
+</main>
