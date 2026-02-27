@@ -1,9 +1,40 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
+@using OutsourceTracker.Services
 @inherits LayoutComponentBase
 
 <TopNav />
 <main class="main">
     <div class="pt-5">
         @Body
+
+        <footer class="mt-auto py-3 bg-light border-top small text-center text-muted">
+            <div class="container">
+                @if (VersionService.HasLoaded)
+                {
+                    <strong>@VersionService.VersionDisplay</strong>
+                }
+                else
+                {
+                    <span class="placeholder-glow">
+                        <span class="placeholder col-3 bg-secondary"></span>
+                    </span>
+                }
+
+                • © @(DateTime.UtcNow.Year) Vandersluis Trucking
+            </div>
+        </footer>
     </div>
 </main>
+
+@code {
+    [Inject] private AppVersionService VersionService { get; init; } = default!;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await VersionService.LoadAsync();
+            StateHasChanged();
+        }
+    }
+}
