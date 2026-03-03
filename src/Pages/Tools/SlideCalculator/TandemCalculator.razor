@@ -1,0 +1,553 @@
+﻿@page "/tools/tandem-calculator"
+@layout MainLayout
+<PageTitle>Tandem Slider Calculator - Outsource Tracker</PageTitle>
+
+<div class="container py-4">
+    <h2 class="fw-bold text-primary mb-4">Tandem Slider Calculator</h2>
+    <p class="text-muted mb-4">
+        Physics-based CG calculation + empirical lbs-per-hole adjustment for multi-stop loads.
+        <strong>Always confirm actual weights on a scale.</strong>
+    </p>
+
+    <div class="row g-4">
+        <!-- INPUTS -->
+        <div class="col-lg-7">
+            <div class="card shadow border-0 mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Empty Weights & Legal Limits</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Steer Empty (lbs)</label>
+                            <input type="number" class="form-control" @bind="SteerEmpty" @bind:event="oninput" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Drives Empty (lbs)</label>
+                            <input type="number" class="form-control" @bind="DrivesEmpty" @bind:event="oninput" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tandems Empty (lbs)</label>
+                            <input type="number" class="form-control" @bind="TandemsEmpty" @bind:event="oninput" />
+                        </div>
+
+                        <div class="col-12"><hr class="my-3" /></div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Max Steer (lbs)</label>
+                            <input type="number" class="form-control" @bind="MaxSteer" @bind:event="oninput" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Max Drives (lbs)</label>
+                            <input type="number" class="form-control" @bind="MaxDrives" @bind:event="oninput" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Max Tandems (lbs)</label>
+                            <input type="number" class="form-control" @bind="MaxTandems" @bind:event="oninput" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow border-0">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Trailer & Load Data</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6 col-lg-3">
+                            <label class="form-label">Usable Length (ft)</label>
+                            <input type="number" step="0.1" class="form-control" @bind="TrailerUsableLengthFeet" @bind:event="oninput" />
+                        </div>
+                        <div class="col-md-6 col-lg-3">
+                            <label class="form-label">Kingpin to Min Tandem (ft)</label>
+                            <input type="number" step="0.1" class="form-control" @bind="KingpinToTandemMinFeet" @bind:event="oninput" />
+                        </div>
+                        <div class="col-md-6 col-lg-3">
+                            <label class="form-label">Hole Spacing (in)</label>
+                            <input type="number" step="0.1" class="form-control" @bind="DistancePerHoleInches" @bind:event="oninput" />
+                        </div>
+                        <div class="col-md-6 col-lg-3">
+                            <label class="form-label">Total Holes</label>
+                            <input type="number" class="form-control" @bind="TotalTandemHoles" @bind:event="oninput" min="1" />
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">
+                                Weight Shift per Hole (lbs)
+                                <span class="text-muted small ms-1" title="Typical 200–500 lb depending on spacing & load. Auto-estimated from physics.">ℹ️</span>
+                            </label>
+                            <input type="number" class="form-control fw-bold" @bind="WeightShiftPerHole" @bind:event="oninput" step="10" min="0" />
+                            <div class="form-text small text-muted">
+                                Calculated ≈ @ApproxShiftPerHole.ToString("F0") lb — override with real-world value if known
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="useScaleAdj" @bind="UseRecentScaleForAdjustment" />
+                        <label class="form-check-label" for="useScaleAdj">Use recent scale ticket for quick adjustment suggestion</label>
+                    </div>
+
+                    @if (UseRecentScaleForAdjustment)
+                    {
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Current Drives from scale (lbs)</label>
+                                <input type="number" class="form-control" @bind="CurrentDrivesFromScale" @bind:event="oninput" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Current Tandems from scale (lbs)</label>
+                                <input type="number" class="form-control" @bind="CurrentTandemsFromScale" @bind:event="oninput" />
+                            </div>
+                        </div>
+                    }
+
+                    <h6 class="mt-4 mb-2">Delivery Stops (Nose → Tail)</h6>
+                    @foreach (var stop in Deliveries)
+                    {
+                        <div class="border rounded p-3 mb-3 bg-light">
+                            <div class="row g-2">
+                                <div class="col-10">
+                                    <input type="text" class="form-control form-control-sm" placeholder="Description" @bind="stop.Description" />
+                                </div>
+                                <div class="col-2">
+                                    <button class="btn btn-sm btn-outline-danger w-100" @onclick="() => RemoveStop(stop)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small">Pallets</label>
+                                    <input type="number" class="form-control form-control-sm" @bind="stop.Pallets" @bind:event="oninput" min="1" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small">Weight (lbs)</label>
+                                    <input type="number" class="form-control form-control-sm" @bind="stop.WeightLbs" @bind:event="oninput" min="0" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="mt-3">
+                        <button class="btn btn-outline-success btn-sm me-2" @onclick="AddStop">
+                            <i class="bi bi-plus"></i> Add Stop
+                        </button>
+                        <button class="btn btn-primary btn-sm" @onclick="Calculate">
+                            <i class="bi bi-arrow-repeat"></i> Calculate
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RESULTS -->
+        <div class="col-lg-5">
+            <div class="card shadow border-0 position-sticky" style="top: 1rem;">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Results & Recommendation</h5>
+                </div>
+                <div class="card-body">
+
+                    @if (BestHole < 1)
+                    {
+                        <p class="text-center text-muted py-5">Enter data and click Calculate...</p>
+                    }
+                    else
+                    {
+                        <!-- Physics-based result -->
+                        <div class="alert @(MinMaxOverage > 0 ? "alert-warning" : "alert-success") mb-3">
+                            <strong>Physics Best: Hole @BestHole of @TotalTandemHoles</strong><br />
+                            @(MinMaxOverage > 0 ? $"Closest balance — over by ≈{MinMaxOverage:F0} lbs" : "All axles appear legal")
+                        </div>
+
+                        <div class="div-table mb-4">
+                            <div class="div-row fw-bold bg-light">
+                                <div class="div-cell">Axle</div>
+                                <div class="div-cell text-end">Weight</div>
+                                <div class="div-cell text-end">Max</div>
+                                <div class="div-cell text-end">Status</div>
+                            </div>
+                            <div class="div-row">
+                                <div class="div-cell">Steer</div>
+                                <div class="div-cell text-end">@DisplaySteer.ToString("F0")</div>
+                                <div class="div-cell text-end">@MaxSteer.ToString("F0")</div>
+                                <div class="div-cell text-end @(DisplaySteer > MaxSteer ? "text-danger" : "text-success")">
+                                    @(DisplaySteer > MaxSteer ? "OVER" : "OK")
+                                </div>
+                            </div>
+                            <div class="div-row">
+                                <div class="div-cell">Drives</div>
+                                <div class="div-cell text-end">@DisplayDrives.ToString("F0")</div>
+                                <div class="div-cell text-end">@MaxDrives.ToString("F0")</div>
+                                <div class="div-cell text-end @(DisplayDrives > MaxDrives ? "text-danger" : "text-success")">
+                                    @(DisplayDrives > MaxDrives ? "OVER" : "OK")
+                                </div>
+                            </div>
+                            <div class="div-row">
+                                <div class="div-cell">Tandems</div>
+                                <div class="div-cell text-end">@DisplayTandems.ToString("F0")</div>
+                                <div class="div-cell text-end">@MaxTandems.ToString("F0")</div>
+                                <div class="div-cell text-end @(DisplayTandems > MaxTandems ? "text-danger" : "text-success")">
+                                    @(DisplayTandems > MaxTandems ? "OVER" : "OK")
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Empirical / user-adjustable section -->
+                        @if (WeightShiftPerHole > 0)
+                        {
+                            <div class="mt-4 pt-3 border-top">
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="empiricalMode" @bind="UseEmpiricalMode" />
+                                    <label class="form-check-label fw-semibold" for="empiricalMode">
+                                        Use empirical lbs-per-hole mode (driver-style adjustment)
+                                    </label>
+                                </div>
+
+                                @if (UseEmpiricalMode)
+                                {
+                                    <div class="mb-3">
+                                        <label class="form-label">Holes offset from physics best (@BestHole)</label>
+                                        <input type="number" class="form-control" @bind="EmpiricalHoleOffset" min="@(-BestHole+1)" max="@(TotalTandemHoles-BestHole)" />
+                                        <small class="text-muted">Positive = slide backward (more on drives), Negative = forward (more on tandems)</small>
+                                    </div>
+
+                                    <div class="alert alert-info small mb-3">
+                                        Adjusted using @WeightShiftPerHole lb per hole
+                                    </div>
+                                }
+                                else if (UseRecentScaleForAdjustment && CurrentDrivesFromScale > 0)
+                                {
+                                    <div class="alert alert-secondary small">
+                                        @ScaleAdjustmentSuggestion
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <!-- SVG diagram (showing physics best position) -->
+                        <div class="border rounded bg-white p-2 mt-4" style="min-height: 220px;">
+                            <svg width="100%" height="240" viewBox="0 0 900 240" preserveAspectRatio="xMidYMid meet">
+                                <!-- Road -->
+                                <rect x="0" y="190" width="900" height="50" fill="#bdc3c7" />
+                                <rect x="0" y="195" width="900" height="2" fill="#95a5a6" />
+
+                                <!-- Tractor (more detailed) -->
+                                <g transform="translate(30, 100)">
+                                    <!-- Cab body -->
+                                    <path d="M0 0 L160 0 L180 30 L180 70 L0 70 Z" fill="#2c3e50" />
+                                    <!-- Hood / nose -->
+                                    <rect x="160" y="20" width="90" height="50" rx="4" fill="#34495e" />
+                                    <!-- Windshield -->
+                                    <path d="M20 10 L140 10 L150 40 L10 40 Z" fill="#ecf0f1" opacity="0.6" />
+                                    <!-- Door window -->
+                                    <rect x="30" y="25" width="50" height="25" fill="#bdc3c7" rx="3" />
+                                    <!-- Exhaust stack -->
+                                    <rect x="170" y="-30" width="12" height="60" fill="#7f8c8d" rx="2" />
+                                    <!-- Fuel tank -->
+                                    <rect x="200" y="30" width="40" height="30" rx="4" fill="#95a5a6" />
+                                    <!-- Steer axle -->
+                                    <g transform="translate(50, 80)">
+                                        <ellipse cx="0" cy="0" rx="28" ry="14" fill="#111" />
+                                        <circle cx="0" cy="0" r="18" fill="#2c2c2c" />
+                                        <circle cx="0" cy="0" r="8" fill="#555" />
+                                    </g>
+                                    <!-- Drive axles -->
+                                    <g transform="translate(180, 80)">
+                                        <ellipse cx="0" cy="0" rx="28" ry="14" fill="#111" />
+                                        <circle cx="0" cy="0" r="18" fill="#2c2c2c" />
+                                        <circle cx="0" cy="0" r="8" fill="#555" />
+                                    </g>
+                                    <g transform="translate(230, 80)">
+                                        <ellipse cx="0" cy="0" rx="28" ry="14" fill="#111" />
+                                        <circle cx="0" cy="0" r="18" fill="#2c2c2c" />
+                                        <circle cx="0" cy="0" r="8" fill="#555" />
+                                    </g>
+                                    <text x="50" y="120" font-size="13" text-anchor="middle" fill="#bdc3c7">Steer</text>
+                                    <text x="205" y="120" font-size="13" text-anchor="middle" fill="#bdc3c7">Drives</text>
+                                </g>
+
+                                <!-- Fifth wheel connection -->
+                                <path d="M280 150 L310 150 L300 175 Z" fill="#7f8c8d" />
+                                <circle cx="295" cy="150" r="12" fill="#95a5a6" />
+
+                                <!-- Trailer (more realistic) -->
+                                <g transform="translate(290, 70)">
+                                    <!-- Main trailer body -->
+                                    <rect x="0" y="0" width="580" height="100" rx="8" fill="#2980b9" />
+                                    <!-- Roof highlight -->
+                                    <rect x="0" y="0" width="580" height="20" fill="#fff" opacity="0.15" />
+                                    <!-- Side rails -->
+                                    <rect x="0" y="0" width="580" height="6" fill="#34495e" />
+                                    <rect x="0" y="94" width="580" height="6" fill="#34495e" />
+                                    <!-- Reflective tape simulation -->
+                                    <rect x="10" y="30" width="560" height="4" fill="#e74c3c" opacity="0.7" />
+                                    <!-- Rear doors -->
+                                    <rect x="560" y="10" width="20" height="80" fill="#2c3e50" />
+                                    <line x1="570" y1="10" x2="570" y2="90" stroke="#ecf0f1" stroke-width="2" />
+                                    <!-- Kingpin -->
+                                    <circle cx="0" cy="50" r="10" fill="#f39c12" />
+
+                                    <!-- Tandem axles (sliding) -->
+                                    @{
+                                        double minFt = KingpinToTandemMinFeet;
+                                        double spacingFt = DistancePerHoleInches / 12.0;
+                                        double posFt = minFt + (BestHole > 0 ? (BestHole - 1) * spacingFt : 0);
+                                        double pxPerFt = 560.0 / TrailerUsableLengthFeet;
+                                        double tandemPx = posFt * pxPerFt;
+                                        tandemPx = Math.Clamp(tandemPx, 100, 560 - 140);
+                                    }
+                                    <g transform="translate(@tandemPx, 110)">
+                                        <!-- Slider rails (long) -->
+                                        <rect x="-180" y="-14" width="360" height="28" rx="6" fill="#7f8c8d" opacity="0.8" />
+                                        <!-- Left tandem axle -->
+                                        <g transform="translate(-60, 0)">
+                                            <ellipse cx="0" cy="0" rx="30" ry="15" fill="#111" />
+                                            <circle cx="0" cy="0" r="20" fill="#2c2c2c" />
+                                            <circle cx="0" cy="0" r="9" fill="#555" />
+                                        </g>
+                                        <!-- Right tandem axle -->
+                                        <g transform="translate(60, 0)">
+                                            <ellipse cx="0" cy="0" rx="30" ry="15" fill="#111" />
+                                            <circle cx="0" cy="0" r="20" fill="#2c2c2c" />
+                                            <circle cx="0" cy="0" r="9" fill="#555" />
+                                        </g>
+                                        <text x="0" y="55" font-size="14" text-anchor="middle" fill="#ecf0f1" font-weight="600">
+                                            Tandems – Hole @(BestHole > 0 ? BestHole : "?")
+                                        </text>
+                                    </g>
+
+                                    <text x="290" y="-20" font-size="16" text-anchor="middle" fill="#ecf0f1" font-weight="bold">
+                                        53 ft Trailer
+                                    </text>
+                                </g>
+
+                                <!-- Floating weight labels -->
+                                @if (BestHole >= 1)
+                                {
+                                    <g transform="translate(120, 40)">
+                                        <rect x="0" y="0" width="150" height="28" rx="6" fill="rgba(0,0,0,0.65)" />
+                                        <text x="75" y="20" font-size="14" fill="white" text-anchor="middle">
+                                            Steer: @BestSteer.ToString("F0") lbs
+                                        </text>
+                                    </g>
+                                    <g transform="translate(280, 40)">
+                                        <rect x="0" y="0" width="150" height="28" rx="6" fill="rgba(0,0,0,0.65)" />
+                                        <text x="75" y="20" font-size="14" fill="white" text-anchor="middle">
+                                            Drives: @BestDrives.ToString("F0") lbs
+                                        </text>
+                                    </g>
+                                    <g transform="translate(620, 120)">
+                                        <rect x="0" y="0" width="170" height="28" rx="6" fill="rgba(0,0,0,0.65)" />
+                                        <text x="85" y="20" font-size="14" fill="white" text-anchor="middle">
+                                            Tandems: @BestTandems.ToString("F0") lbs
+                                        </text>
+                                    </g>
+                                }
+                            </svg>
+                        </div>
+
+                        <small class="text-muted d-block text-center mt-2">
+                            ≈ @(ApproxShiftPerHole.ToString("F0")) lb/hole calculated • Tandem ≈ @((KingpinToTandemMinFeet + (BestHole-1)*(DistancePerHoleInches/12.0)).ToString("F1")) ft from kingpin
+                        </small>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // ───────────────────────────────────────────────
+    // Properties & Defaults
+    // ───────────────────────────────────────────────
+    private double TrailerUsableLengthFeet { get; set; } = 53.0;
+    private double KingpinToTandemMinFeet   { get; set; } = 36.0;
+    private double DistancePerHoleInches    { get; set; } = 6.0;
+    private int    TotalTandemHoles         { get; set; } = 15;
+
+    private double SteerEmpty   { get; set; } = 11220;
+    private double DrivesEmpty  { get; set; } = 12460;
+    private double TandemsEmpty { get; set; } = 9000;
+
+    private double MaxSteer   { get; set; } = 12000;
+    private double MaxDrives  { get; set; } = 34000;
+    private double MaxTandems { get; set; } = 34000;
+
+    private double FifthWheelAheadOfDrivesFt { get; set; } = 1.5;
+    private double TractorWheelbaseFt        { get; set; } = 18.0;
+    private double SteerFraction  => FifthWheelAheadOfDrivesFt / TractorWheelbaseFt;
+    private double DrivesFraction => 1.0 - SteerFraction;
+
+    private List<DeliveryStop> Deliveries { get; set; } = new()
+    {
+        new() { Description = "Stop 4 [Nose]", Pallets = 7, WeightLbs = 14718 },
+        new() { Description = "Stop 3",        Pallets = 6, WeightLbs = 6732  },
+        new() { Description = "Stop 2",        Pallets = 6, WeightLbs = 10196 },
+        new() { Description = "Stop 1 [Tail]", Pallets = 7, WeightLbs = 11378 },
+    };
+
+    // Physics results
+    private int    BestHole = -1;
+    private double BestSteer, BestDrives, BestTandems, MinMaxOverage;
+    private double ApproxShiftPerHole;
+
+    // Empirical / user override
+    private double WeightShiftPerHole { get; set; } = 250;
+    private bool   UseEmpiricalMode   { get; set; }
+    private int    EmpiricalHoleOffset { get; set; }
+
+    // Scale ticket helper
+    private bool   UseRecentScaleForAdjustment { get; set; } = false;
+    private double CurrentDrivesFromScale  { get; set; } = 0;
+    private double CurrentTandemsFromScale { get; set; } = 0;
+    private string ScaleAdjustmentSuggestion { get; set; } = "";
+
+    // Display values (physics or empirical-adjusted)
+    private double DisplaySteer   => UseEmpiricalMode ? AdjustedSteer   : BestSteer;
+    private double DisplayDrives  => UseEmpiricalMode ? AdjustedDrives  : BestDrives;
+    private double DisplayTandems => UseEmpiricalMode ? AdjustedTandems : BestTandems;
+
+    private double AdjustedSteer, AdjustedDrives, AdjustedTandems;
+
+    private class DeliveryStop
+    {
+        public string? Description { get; set; }
+        public int Pallets { get; set; } = 0;
+        public double WeightLbs { get; set; } = 0;
+    }
+
+    protected override void OnInitialized()
+    {
+        Calculate();
+    }
+
+    private void AddStop()
+    {
+        Deliveries.Add(new DeliveryStop());
+        StateHasChanged();
+    }
+
+    private void RemoveStop(DeliveryStop stop)
+    {
+        Deliveries.Remove(stop);
+        Calculate();
+    }
+
+    private void Calculate()
+    {
+        if (Deliveries.Any(d => d.WeightLbs <= 0 || d.Pallets <= 0) || TotalTandemHoles < 1)
+            return;
+
+        double totalCargo = Deliveries.Sum(d => d.WeightLbs);
+        double gross = SteerEmpty + DrivesEmpty + TandemsEmpty + totalCargo;
+        if (gross > 80000)
+        {
+            BestHole = -1;
+            return;
+        }
+
+        double palletSpacingFt = TrailerUsableLengthFeet / 30.0;
+
+        var cgList = new List<(double cgFtFromNose, double weight)>();
+        int cumPallets = 0;
+
+        foreach (var d in Deliveries)
+        {
+            double center = cumPallets + d.Pallets / 2.0;
+            cgList.Add((center * palletSpacingFt, d.WeightLbs));
+            cumPallets += d.Pallets;
+        }
+
+        BestHole = -1;
+        MinMaxOverage = double.MaxValue;
+        BestSteer = BestDrives = BestTandems = 0;
+
+        double holeSpacingFt = DistancePerHoleInches / 12.0;
+
+        // Physics loop
+        for (int h = 1; h <= TotalTandemHoles; h++)
+        {
+            double tandemFtFromKingpin = KingpinToTandemMinFeet + (h - 1) * holeSpacingFt;
+
+            double kingpinWeight = 0;
+            foreach (var (cgFt, w) in cgList)
+            {
+                double lever = tandemFtFromKingpin - cgFt;
+                if (lever > 0) kingpinWeight += w * (lever / tandemFtFromKingpin);
+            }
+
+            double tandemsCargo = totalCargo - kingpinWeight;
+            double steerAdd = kingpinWeight * SteerFraction;
+            double drivesAdd = kingpinWeight * DrivesFraction;
+
+            double s = SteerEmpty + steerAdd;
+            double d = DrivesEmpty + drivesAdd;
+            double t = TandemsEmpty + tandemsCargo;
+
+            double overS = Math.Max(0, s - MaxSteer);
+            double overD = Math.Max(0, d - MaxDrives);
+            double overT = Math.Max(0, t - MaxTandems);
+            double maxOver = Math.Max(Math.Max(overS, overD), overT);
+
+            if (maxOver < MinMaxOverage ||
+                (Math.Abs(maxOver - MinMaxOverage) < 0.5 && h > BestHole))
+            {
+                MinMaxOverage = maxOver;
+                BestHole = h;
+                BestSteer = s;
+                BestDrives = d;
+                BestTandems = t;
+            }
+        }
+
+        // Approx shift
+        double midFt = KingpinToTandemMinFeet + (TotalTandemHoles / 2.0) * holeSpacingFt;
+        ApproxShiftPerHole = totalCargo * holeSpacingFt / midFt;
+
+        if (WeightShiftPerHole == 0)
+            WeightShiftPerHole = Math.Round(ApproxShiftPerHole / 10) * 10;
+
+        // Empirical mode adjustment
+        if (UseEmpiricalMode && BestHole >= 1 && WeightShiftPerHole > 0)
+        {
+            double shiftLbs = EmpiricalHoleOffset * WeightShiftPerHole;
+            AdjustedDrives  = BestDrives  + shiftLbs;
+            AdjustedTandems = BestTandems - shiftLbs;
+            AdjustedSteer   = BestSteer   - (shiftLbs * 0.12);
+        }
+        else
+        {
+            AdjustedSteer = AdjustedDrives = AdjustedTandems = 0;
+        }
+
+        // Scale ticket suggestion
+        ScaleAdjustmentSuggestion = "";
+        if (UseRecentScaleForAdjustment && CurrentDrivesFromScale > 0 && CurrentTandemsFromScale > 0 && WeightShiftPerHole > 0)
+        {
+            double drivesOver = Math.Max(0, CurrentDrivesFromScale - MaxDrives);
+            double tandemsOver = Math.Max(0, CurrentTandemsFromScale - MaxTandems);
+
+            if (drivesOver > 0)
+            {
+                double holesNeed = drivesOver / WeightShiftPerHole;
+                int holesRec = (int)Math.Ceiling(holesNeed);
+                ScaleAdjustmentSuggestion = $"Drives over by {drivesOver:F0} lb → slide tandems FORWARD ~{holesNeed:F1} holes ({holesRec} recommended) to shift ~{holesRec * WeightShiftPerHole:F0} lb to tandems.";
+            }
+            else if (tandemsOver > 0)
+            {
+                double holesNeed = tandemsOver / WeightShiftPerHole;
+                int holesRec = (int)Math.Ceiling(holesNeed);
+                ScaleAdjustmentSuggestion = $"Tandems over by {tandemsOver:F0} lb → slide tandems BACKWARD ~{holesNeed:F1} holes ({holesRec} recommended) to shift ~{holesRec * WeightShiftPerHole:F0} lb to drives.";
+            }
+            else
+            {
+                ScaleAdjustmentSuggestion = "Current drives/tandems look legal (verify steer & bridge formula too).";
+            }
+        }
+
+        StateHasChanged();
+    }
+}
