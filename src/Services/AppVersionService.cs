@@ -194,6 +194,7 @@ public class AppVersionService
     {
         await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", LocalStorageKey);
         await _jsRuntime.InvokeVoidAsync("window.application.forceUpdateAndReload");
+        _navigation.NavigateTo(_navigation.Uri, forceLoad: true);
     }
 
     private async Task SaveToLocalStorageAsync(VersionInfo version)

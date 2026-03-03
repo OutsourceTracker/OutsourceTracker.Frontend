@@ -80,7 +80,7 @@
             if (VersionService.IsUpdateAvailable)
             {
                 var remote = VersionService.RemoteVersion;
-                LatestVersion = VersionService.ShortVersion;
+                LatestVersion = remote?.Version ?? "Unknown";
 
                 Logger.LogInformation("Update available: {Current} → {Latest}", VersionService.ShortVersion, LatestVersion);
                 StateHasChanged();
