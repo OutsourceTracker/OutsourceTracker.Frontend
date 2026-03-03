@@ -1,4 +1,5 @@
 ﻿@using OutsourceTracker.Models.Trailers
+
 <div class="flex-grow-1 overflow-auto">
     @if (Trailers is null)
     {
@@ -18,10 +19,20 @@
         <div class="list-group list-group-flush">
             @foreach (var trailer in Trailers)
             {
-                <button type="button"
-                        class="list-group-item list-group-item-action @(SelectedId == trailer.Id ? "active" : "")"
-                        @onclick="() => OnCallback(trailer)">
-                    <div class="d-flex justify-content-between align-items-center small">
+                var isActive = SelectedId == trailer.Id;
+                var isSelected = SelectedTrailers?.Any(t => t.Id == trailer.Id) ?? false;
+
+                <div class="list-group-item list-group-item-action d-flex align-items-center gap-3
+                        @(isActive ? "active bg-primary-subtle" : "")"
+                     @onclick="@(() => OnTrailerSelected.InvokeAsync(trailer))">
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox"
+                               checked="@isSelected"
+                               @onchange="@(e => OnToggleSelection.InvokeAsync(trailer))" />
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center flex-grow-1 small">
                         <div>
                             <strong>@trailer.Prefix@trailer.Name</strong>
                         </div>
@@ -33,7 +44,7 @@
                             }
                         </div>
                     </div>
-                </button>
+                </div>
             }
         </div>
     }
@@ -42,18 +53,12 @@
 @code {
     [Parameter] public List<TrailerViewModel>? Trailers { get; set; }
     [Parameter] public Guid? SelectedId { get; set; }
+    [Parameter] public IReadOnlyList<TrailerViewModel>? SelectedTrailers { get; set; }
     [Parameter] public EventCallback<TrailerViewModel?> OnTrailerSelected { get; set; }
+    [Parameter] public EventCallback<TrailerViewModel> OnToggleSelection { get; set; }  // ← new
 
     public async Task RefreshAsync()
     {
         await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task OnCallback(TrailerViewModel? trailer)
-    {
-        if (OnTrailerSelected.HasDelegate)
-        {
-            await OnTrailerSelected.InvokeAsync(trailer);
-        }
     }
 }

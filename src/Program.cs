@@ -50,9 +50,10 @@ namespace OutsourceTracker
             {
                 client.BaseAddress = new Uri("https://graph.microsoft.com");
             });
+            builder.Services.AddHttpClient();
             builder.Services.AddScoped<UserPhotoService>();
             builder.Services.AddScoped<UserService>();
-
+            builder.Services.AddScoped<AppVersionService>();
             builder.Services.AddScoped<TrailerService>()
                 .AddScoped<IModelCreateService<TrailerViewModel, HttpResponseMessage>>(sp => sp.GetRequiredService<TrailerService>())
                 .AddScoped<IModelDeleteService<TrailerViewModel, HttpResponseMessage>>(sp => sp.GetRequiredService<TrailerService>())

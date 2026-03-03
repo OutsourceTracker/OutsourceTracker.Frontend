@@ -1,0 +1,382 @@
+﻿@using Microsoft.AspNetCore.Authorization
+@using OutsourceTracker.Equipment
+@using OutsourceTracker.Geolocation
+@using OutsourceTracker.Models.Trailers
+@using OutsourceTracker.Services
+@using OutsourceTracker.Services.ModelService
+@attribute [Authorize(Roles = "Trailers.Write,Trailers.UpdateLocation")]
+
+<div class="modal fade" id="trailerSpotModal" tabindex="-1" aria-labelledby="trailerSpotModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content shadow-lg border-0 rounded-4">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-semibold" id="trailerSpotModalLabel">
+                    Spot Trailers
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body p-4 p-md-5">
+                @if (!string.IsNullOrEmpty(message))
+                {
+                    <div class="alert alert-@messageType alert-dismissible fade show mb-4" role="alert">
+                        @message
+                        <button type="button" class="btn-close" @onclick="ClearMessage"></button>
+                    </div>
+                }
+
+                <EditForm Model="@model" OnValidSubmit="HandleSubmit" FormName="multiSpotForm">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="text-danger mb-4" />
+
+                    <!-- Pre-selected trailers (read-only view when provided) -->
+                    @if (SelectedTrailers?.Any() == true)
+                    {
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">Selected Trailers (@SelectedTrailers.Count)</label>
+                            <div class="border rounded-3 p-3 bg-light-subtle" style="max-height: 180px; overflow-y: auto;">
+                                <div class="d-flex flex-wrap gap-2">
+                                    @foreach (var trailer in SelectedTrailers)
+                                    {
+                                        <span class="badge bg-primary fs-6 px-3 py-2 rounded-pill">
+                                            @trailer.Prefix @trailer.Name
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="form-text text-muted small mt-1">
+                                These trailers will be spotted at the same location.
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Manual input when no pre-selected trailers -->
+                        <div class="form-floating mb-4 uppercase-input">
+                            <InputTextArea id="trailerIds"
+                                           @bind-Value="model.TrailerIdsInput"
+                                           @oninput="@(e => model.TrailerIdsInput = e.Value?.ToString()?.ToUpperInvariant())"
+                                           class="form-control"
+                                           style="min-height: 120px;"
+                                           placeholder="JBHZ056779, JBHU123456, TR-789012" />
+                            <label for="trailerIds">Trailer IDs (comma / line separated) <span class="text-danger">*</span></label>
+                            <ValidationMessage For="@(() => model.TrailerIdsInput)" />
+                            <div class="form-text text-muted small mt-1">
+                                e.g. JBHZ 056779, JBHU123456, TR-789<br />
+                                One per line or comma separated
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Location (same for all) -->
+                    <div class="border rounded-3 p-4 mb-5 bg-light-subtle">
+                        <h6 class="mb-3 text-uppercase fw-semibold text-secondary">Location for all trailers</h6>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <InputNumber id="lat" @bind-Value="model.Latitude" class="form-control" step="any" />
+                                    <label for="lat">Latitude <span class="text-danger">*</span></label>
+                                    <ValidationMessage For="@(() => model.Latitude)" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <InputNumber id="lon" @bind-Value="model.Longitude" class="form-control" step="any" />
+                                    <label for="lon">Longitude <span class="text-danger">*</span></label>
+                                    <ValidationMessage For="@(() => model.Longitude)" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="button"
+                                class="btn btn-outline-primary w-100 mb-3 d-flex align-items-center justify-content-center gap-2"
+                                @onclick="GetCurrentLocation"
+                                disabled="@isLocating">
+                            <span class="spinner-border spinner-border-sm" role="status" style="@(isLocating ? "" : "display:none")"></span>
+                            @(isLocating ? "Locating..." : "Use Current GPS")
+                        </button>
+
+                        <div class="form-text text-muted small text-center">
+                            GPS is recommended for highest accuracy.
+                        </div>
+
+                        @if (!model.Latitude.HasValue || !model.Longitude.HasValue)
+                        {
+                            <div class="alert alert-warning mt-3 mb-0 small text-center py-2">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                Location is required — use GPS or enter coordinates manually
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Results -->
+                    @if (results.Any())
+                    {
+                        <div class="alert alert-info mb-4">
+                            <strong>Spotting results:</strong>
+                            <ul class="mb-0 mt-2 small list-unstyled">
+                                @foreach (var r in results)
+                                {
+                                    <li class="@(r.Success ? "text-success" : "text-danger") mb-1">
+                                        @r.TrailerIdentifier → @(r.Success ? "✓ Updated" : $"✗ {r.Error}")
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </EditForm>
+            </div>
+
+            <div class="modal-footer border-0 px-4 px-md-5 pb-4 pt-0">
+                <button type="button" class="btn btn-outline-secondary px-5 py-3"
+                        data-bs-dismiss="modal"
+                        disabled="@isSubmitting">
+                    Cancel
+                </button>
+                <button type="submit" form="multiSpotForm"
+                        class="btn btn-success px-5 py-3 fw-semibold"
+                        disabled="@(isSubmitting || !CanSubmit)"
+                        @onclick="async () => await HandleSubmit()">
+                    <span class="spinner-border spinner-border-sm me-2 @(isSubmitting ? null : "d-none")" role="status"></span>
+                    @(isSubmitting ? "Spotting..." : "Spot Trailers")
+                </button>
+
+                @if (!CanSubmit && !isSubmitting)
+                {
+                    <small class="text-muted d-block mt-2 text-center">
+                        Select at least one trailer or enter trailer IDs
+                    </small>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Inject] private TrailerService TrailerService { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    [Parameter] public List<TrailerViewModel>? SelectedTrailers { get; set; }
+    [Parameter] public EventCallback<Vector2> OnLocationUpdated { get; set; }
+
+    private SpotMultipleModel model = new();
+    private bool isSubmitting = false;
+    private bool isLocating = false;
+    private string? message;
+    private string? messageType;
+    private List<SpotResult> results = new();
+
+    private bool CanSubmit => (SelectedTrailers?.Any() == true || !string.IsNullOrWhiteSpace(model.TrailerIdsInput));
+
+    // Public method to show the modal (can be called from parent)
+    public async Task Show()
+    {
+        model = new SpotMultipleModel();
+        results.Clear();
+        ClearMessage();
+
+        // Pre-fill from SelectedTrailers if provided
+        if (SelectedTrailers?.Any() == true)
+        {
+            model.TrailerIdsInput = string.Join(", ", SelectedTrailers.Select(t => $"{t.Prefix} {t.Name}"));
+        }
+
+        var modal = await JS.InvokeAsync<IJSObjectReference>(
+            "bootstrap.Modal.getOrCreateInstance",
+            "#trailerSpotModal");
+
+        await modal.InvokeVoidAsync("show");
+        await modal.DisposeAsync();
+
+        // if (!model.Latitude.HasValue || !model.Longitude.HasValue)
+        // {
+        //     await GetCurrentLocation();
+        // }
+
+        StateHasChanged();
+    }
+
+    private async Task GetCurrentLocation()
+    {
+        isLocating = true;
+        ClearMessage();
+
+        try
+        {
+            var pos = await JS.InvokeAsync<GeolocationPosition>("navigator.geolocation.getCurrentPositionWrapper");
+            model.Latitude = pos.Coords.Latitude;
+            model.Longitude = pos.Coords.Longitude;
+            model.Accuracy = pos.Coords.Accuracy;
+
+            message = $"Location captured (accuracy: {model.Accuracy:F1} m)";
+            messageType = "success";
+        }
+        catch (JSException ex)
+        {
+            message = ex.Message.Contains("denied")
+                ? "Location permission denied. Please allow access or enter coordinates manually."
+                : $"Location error: {ex.Message}";
+            messageType = "danger";
+        }
+        catch (Exception ex)
+        {
+            message = $"Unexpected error: {ex.Message}";
+            messageType = "danger";
+        }
+        finally
+        {
+            isLocating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        isSubmitting = true;
+        results.Clear();
+        ClearMessage();
+        StateHasChanged();
+
+        if (!model.Latitude.HasValue || !model.Longitude.HasValue)
+        {
+            message = "Location is required. Please use 'Use Current GPS' or enter valid latitude/longitude values.";
+            messageType = "warning";
+            isSubmitting = false;
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            IEnumerable<TrailerViewModel> trailersToUpdate;
+
+            if (SelectedTrailers?.Any() == true)
+            {
+                trailersToUpdate = SelectedTrailers;
+            }
+            else
+            {
+                var identifiers = ParseTrailerIdentifiers(model.TrailerIdsInput);
+                if (!identifiers.Any())
+                {
+                    message = "No valid trailer IDs provided.";
+                    messageType = "warning";
+                    return;
+                }
+
+                var foundTrailers = new List<TrailerViewModel>();
+
+                foreach (var id in identifiers)
+                {
+                    var (prefix, name) = SplitPrefixAndNumber(id);
+                    if (string.IsNullOrEmpty(prefix) || string.IsNullOrEmpty(name))
+                    {
+                        results.Add(new SpotResult(id, false, "Invalid format"));
+                        continue;
+                    }
+
+                    var match = await TrailerService.Search(new
+                    {
+                        PrefixEquals = prefix,
+                        NameEquals = name
+                    }).FirstOrDefaultAsync(t => t.Prefix == prefix && t.Name == name);
+
+                    if (match != null)
+                        foundTrailers.Add(match);
+                    else
+                        results.Add(new SpotResult(id, false, "Not found"));
+                }
+
+                trailersToUpdate = foundTrailers;
+            }
+
+            Vector2 location = new Vector2(model.Latitude.Value, model.Longitude.Value);
+            // Now update all found trailers
+            foreach (var trailer in trailersToUpdate)
+            {
+                try
+                {
+                    var resp = await TrailerService.UpdateLocation(
+                        trailer.Id,
+                        location,
+                        accuracy: model.Accuracy);
+
+                    resp.EnsureSuccessStatusCode();
+                    results.Add(new SpotResult($"{trailer.Prefix} {trailer.Name}", true, null));
+                }
+                catch (Exception ex)
+                {
+                    results.Add(new SpotResult($"{trailer.Prefix} {trailer.Name}", false, ex.Message));
+                }
+            }
+
+            var successCount = results.Count(r => r.Success);
+            message = $"{successCount}/{results.Count} trailers updated.";
+            messageType = successCount == results.Count ? "success" : (successCount > 0 ? "warning" : "danger");
+            if (OnLocationUpdated.HasDelegate)
+            {
+                var modal = await JS.InvokeAsync<IJSObjectReference>("bootstrap.Modal.getOrCreateInstance", "#trailerSpotModal");
+                await modal.InvokeVoidAsync("hide");
+                await modal.DisposeAsync();
+                model.TrailerIdsInput = null;
+                model.Latitude = null;
+                model.Longitude = null;
+                await OnLocationUpdated.InvokeAsync(location);
+
+
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"Error: {ex.Message}";
+            messageType = "danger";
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearMessage()
+    {
+        message = null;
+        messageType = null;
+    }
+
+    // Very simple parsing – improve as needed
+    private IEnumerable<string> ParseTrailerIdentifiers(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return Enumerable.Empty<string>();
+
+        return input
+            .Split(new[] { ',', '\n', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => s.Trim().Replace(" ", ""))
+            .Where(s => !string.IsNullOrWhiteSpace(s));
+    }
+
+    private (string prefix, string number) SplitPrefixAndNumber(string identifier)
+    {
+        // Very naive split – improve based on your real trailer format rules
+        for (int i = 1; i < identifier.Length; i++)
+        {
+            if (char.IsDigit(identifier[i]))
+            {
+                return (identifier[..i], identifier[i..]);
+            }
+        }
+        return (identifier, "");
+    }
+
+    // Model with basic client-side validation
+    private class SpotMultipleModel
+    {
+        public string? TrailerIdsInput { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public double Accuracy { get; set; } = -1;
+    }
+
+    private record SpotResult(string TrailerIdentifier, bool Success, string? Error);
+}
