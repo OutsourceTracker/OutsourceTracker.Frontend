@@ -1,40 +1,107 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
 @using OutsourceTracker.Services
 @inherits LayoutComponentBase
+@implements IDisposable
 
 <TopNav />
-<main class="main">
-    <div class="pt-5">
-        @Body
 
-        <footer class="mt-auto py-3 bg-light border-top small text-center text-muted">
-            <div class="container">
-                @if (VersionService.HasLoaded)
-                {
-                    <strong>@VersionService.VersionDisplay</strong>
-                }
-                else
-                {
-                    <span class="placeholder-glow">
-                        <span class="placeholder col-3 bg-secondary"></span>
-                    </span>
-                }
-
-                • © @(DateTime.UtcNow.Year) Vandersluis Trucking
+<main class="main flex-grow-1">
+    <div class="pt-5 pb-5">
+        <!-- Update banner -->
+        @if (VersionService.IsUpdateAvailable && !UpdateDismissedThisSession)
+        {
+            <div class="alert alert-info alert-dismissible fade show position-fixed bottom-0 start-50 translate-middle-x mb-4 shadow-lg" role="alert" style="z-index: 1050; min-width: 340px; max-width: 90%;">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                    <div>
+                        <strong>New version available!</strong><br />
+                        <small>Current: v@VersionService.ShortVersion → Latest: v@LatestVersion</small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-primary" @onclick="ApplyUpdate">Update Now</button>
+                        <button type="button" class="btn-close" @onclick="DismissUpdate" aria-label="Close"></button>
+                    </div>
+                </div>
             </div>
-        </footer>
+        }
+
+        @Body
     </div>
 </main>
 
+<footer class="mt-auto py-3 bg-light border-top small text-center text-muted">
+    <div class="container">
+        Outsource Tracker
+        @if (VersionService.HasLoaded)
+        {
+            <strong>@VersionService.VersionDisplay</strong>
+        }
+        else
+        {
+            <span class="placeholder-glow">
+                <span class="placeholder col-3 bg-secondary"></span>
+            </span>
+        }
+        • © @(DateTime.UtcNow.Year) Vandersluis Trucking
+    </div>
+</footer>
+
 @code {
     [Inject] private AppVersionService VersionService { get; init; } = default!;
+    [Inject] private ILogger<MainLayout> Logger { get; init; } = default!;
+
+    private Timer? _updateTimer;
+    private bool UpdateDismissedThisSession { get; set; }
+    private string LatestVersion { get; set; } = "";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             await VersionService.LoadAsync();
+            await CheckForUpdateAsync(); // immediate check after load
             StateHasChanged();
+
+            // Poll every 3 minutes (adjust as needed – 2 min is aggressive)
+            _updateTimer = new Timer(async _ => await CheckForUpdateAsync(), null,
+                TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(3));
         }
+    }
+
+    private async Task CheckForUpdateAsync()
+    {
+        try
+        {
+            await VersionService.CheckRemoteVersionAsync();
+
+            if (VersionService.IsUpdateAvailable)
+            {
+                var remote = VersionService.RemoteVersion;
+                LatestVersion = VersionService.ShortVersion;
+
+                Logger.LogInformation("Update available: {Current} → {Latest}", VersionService.ShortVersion, LatestVersion);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to check for updates");
+        }
+    }
+
+    private void ApplyUpdate()
+    {
+        VersionService.ForceUpdate();
+    }
+
+    private void DismissUpdate()
+    {
+        UpdateDismissedThisSession = true;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _updateTimer?.Dispose();
+        _updateTimer = null;
     }
 }
