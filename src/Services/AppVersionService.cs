@@ -190,7 +190,11 @@ public class AppVersionService
     /// Forces a full page reload to apply the latest version (bypasses cache where possible).
     /// For PWA/service-worker scenarios, combine with JS interop to skipWaiting.
     /// </summary>
-    public async Task ForceUpdate() => await _jsRuntime.InvokeVoidAsync("window.application.forceUpdateAndReload");
+    public async Task ForceUpdate()
+    {
+        await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", LocalStorageKey);
+        await _jsRuntime.InvokeVoidAsync("window.application.forceUpdateAndReload");
+    }
 
     private async Task SaveToLocalStorageAsync(VersionInfo version)
     {
