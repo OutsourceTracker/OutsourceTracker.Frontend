@@ -138,9 +138,10 @@ public class AppVersionService
     /// Checks the remote version.json file and updates update availability status.
     /// Throttled to once every {RemoteCheckIntervalMinutes} minutes.
     /// </summary>
-    public async Task CheckRemoteVersionAsync()
+    /// <param name="forced">Bypass the cooldown interval</param>
+    public async Task CheckRemoteVersionAsync(bool forced = false)
     {
-        if ((DateTime.UtcNow - _lastRemoteCheck) < TimeSpan.FromMinutes(RemoteCheckIntervalMinutes))
+        if (!forced && ((DateTime.UtcNow - _lastRemoteCheck) < TimeSpan.FromMinutes(RemoteCheckIntervalMinutes)))
         {
             _logger.LogDebug("Remote version check skipped — last check was recent");
             return;
@@ -189,7 +190,7 @@ public class AppVersionService
     /// Forces a full page reload to apply the latest version (bypasses cache where possible).
     /// For PWA/service-worker scenarios, combine with JS interop to skipWaiting.
     /// </summary>
-    public async Task ForceUpdate() => await _jsRuntime.InvokeVoidAsync("forceUpdateAndReload");
+    public async Task ForceUpdate() => await _jsRuntime.InvokeVoidAsync("window.application.forceUpdateAndReload");
 
     private async Task SaveToLocalStorageAsync(VersionInfo version)
     {
