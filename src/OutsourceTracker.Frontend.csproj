@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
+	<BlazorWebAssemblyEnableCompression>true</BlazorWebAssemblyEnableCompression>
     <RootNamespace>OutsourceTracker</RootNamespace>
 	<ApplicationIcon>outsource.ico</ApplicationIcon>
     <Title>OutsourceTacker Frontend</Title>
