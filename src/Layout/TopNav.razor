@@ -86,7 +86,7 @@
                                 <img src="@AvatarUrl" class="rounded-circle border border-light" width="32" height="32" alt="Avatar" />
                                 <span class="fw-semibold d-none d-md-inline">@DisplayName</span>
                             </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
+                            <ul class="dropdown-menu dropdown-menu-end dropdown-menu-lg-start">
                                 <li class="dropdown-header">
                                     <strong>@DisplayName</strong><br />
                                     <small class="text-muted">@Email</small>
@@ -122,6 +122,7 @@
     private bool IsAuthenticated = false;
 
     [Inject] private UserPhotoService PhotoService { get; init; } = default!;
+    private IJSObjectReference? _jsModule;
 
     protected override async Task OnInitializedAsync()
     {
@@ -146,19 +147,25 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && IsAuthenticated)
+        if (firstRender)
         {
-            try
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./TopNav.razor.js");
+            await _jsModule.InvokeVoidAsync("setupNavbarClose");
+
+            if (IsAuthenticated)
             {
-                var realAvatar = await PhotoService.GetAvatarUrlAsync(DisplayName);
-                if (realAvatar != AvatarUrl)   // only update if different
+                try
                 {
-                    AvatarUrl = realAvatar;
-                    StateHasChanged();
+                    var realAvatar = await PhotoService.GetAvatarUrlAsync(DisplayName);
+                    if (realAvatar != AvatarUrl)
+                    {
+                        AvatarUrl = realAvatar;
+                        StateHasChanged();
+                    }
                 }
-            }
-            catch
-            {
+                catch
+                {
+                }
             }
         }
     }

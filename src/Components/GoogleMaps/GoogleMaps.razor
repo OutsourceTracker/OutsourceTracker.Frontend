@@ -1,0 +1,200 @@
+﻿@using Microsoft.JSInterop
+@using System.Collections.Generic
+@using System.Threading.Tasks
+
+<div id="@ContainerId" class="map-container"></div>
+
+@if (ShowCurrentLocation && _currentFrequency > 0)
+{
+    <div class="update-frequency">Location update frequency: @_currentFrequency ms</div>
+}
+
+@code {
+    [Parameter] public string GoogleMapsApiKey { get; set; } = string.Empty;
+    [Parameter] public string MapId { get; set; } = "DEMO_MAP_ID";
+    [Parameter] public string ContainerId { get; set; } = $"map-{Guid.NewGuid():N}";
+    [Parameter] public LatLng Center { get; set; } = new() { Lat = 47.23236, Lng = -122.22586 };
+    [Parameter] public int Zoom { get; set; } = 10;
+    [Parameter] public List<MapPin> Pins { get; set; } = new();
+    [Parameter] public List<MapZone> Zones { get; set; } = new();
+    [Parameter] public bool ShowCurrentLocation { get; set; }
+    [Parameter] public int UpdateIntervalMs { get; set; } = 5000;
+    [Parameter] public bool EnableClustering { get; set; } = true;
+    [Parameter] public bool AutoFitOnLoad { get; set; } = true;
+    [Parameter] public int FitPaddingPixels { get; set; } = 60;
+    [Parameter] public EventCallback<LatLng> OnLocationUpdated { get; set; }
+    [Parameter] public EventCallback OnMapReady { get; set; }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private DotNetObjectReference<GoogleMaps>? _dotNetRef;
+    private double _currentFrequency;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+
+        await JS.InvokeVoidAsync("GoogleMaps.init",
+            ContainerId,
+            GoogleMapsApiKey,
+            Center.Lat, Center.Lng,
+            Zoom,
+            _dotNetRef,
+            MapId);
+
+        foreach (var pin in Pins)
+        {
+            await AddPin(pin);
+        }
+
+        foreach (var zone in Zones)
+        {
+            await AddZone(zone);
+        }
+
+        if (AutoFitOnLoad && (Pins.Any() || Zones.Any() || ShowCurrentLocation))
+        {
+            await FitToMarkersAsync();
+        }
+
+        if (ShowCurrentLocation)
+        {
+            await ToggleCurrentLocation(true);
+        }
+
+        await OnMapReady.InvokeAsync();
+    }
+
+    public async Task AddPin(MapPin pin)
+    {
+        var options = new
+        {
+            Position = new { pin.Position.Lat, pin.Position.Lng },
+            IconUrl = pin.IconUrl,
+            Glyph = pin.Glyph,
+            GlyphColor = pin.GlyphColor,
+            CustomColor = pin.CustomColor,
+            BorderColor = pin.BorderColor,
+            Scale = pin.Scale,
+            Title = pin.Title,
+            Content = pin.Content,
+            Radius = pin.Radius
+        };
+
+        await JS.InvokeVoidAsync("GoogleMaps.addPin", ContainerId, options);
+    }
+
+    public async Task AddZone(MapZone zone)
+    {
+        var paths = zone.Paths.Select(p => new { p.Lat, p.Lng }).ToArray();
+        var entries = zone.EntryPoints.Select(p => new { p.Lat, p.Lng }).ToArray();
+        var exits = zone.ExitPoints.Select(p => new { p.Lat, p.Lng }).ToArray();
+
+        var options = new
+        {
+            Paths = paths,
+            FillColor = zone.FillColor ?? "#00FF0044",
+            StrokeColor = zone.StrokeColor ?? "#008000",
+            Entries = entries,
+            Exits = exits
+        };
+
+        await JS.InvokeVoidAsync("GoogleMaps.addZone", ContainerId, options);
+    }
+
+    public async Task ToggleCurrentLocation(bool enable)
+    {
+        await JS.InvokeVoidAsync("GoogleMaps.toggleCurrentLocation", ContainerId, enable, UpdateIntervalMs);
+    }
+
+    public async Task FitToMarkersAsync()
+    {
+        await JS.InvokeVoidAsync("GoogleMaps.fitToAllMarkers", ContainerId, FitPaddingPixels);
+    }
+
+    public async Task FocusOnPinAsync(MapPin pin, bool zoomIn = true, int zoomLevel = 15)
+    {
+        if (pin == null || pin.Position == null) return;
+
+        if (zoomIn)
+        {
+            await JS.InvokeVoidAsync("GoogleMaps.focusOnPosition", ContainerId, pin.Position.Lat, pin.Position.Lng, zoomLevel);
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("GoogleMaps.focusOnPosition", ContainerId, pin.Position.Lat, pin.Position.Lng);
+        }
+    }
+
+    public async Task FocusOnPositionAsync(LatLng position, int? zoomLevel = null)
+    {
+        if (position == null) return;
+
+        await JS.InvokeVoidAsync("GoogleMaps.focusOnPosition", ContainerId,
+            position.Lat, position.Lng,
+            zoomLevel ?? (int?)null);
+    }
+
+    public async Task FocusOnZoneAsync(int zoneIndex)
+    {
+        await JS.InvokeVoidAsync("GoogleMaps.focusOnZone", ContainerId, zoneIndex);
+    }
+
+    public async Task FocusOnZoneAsync(MapZone zone)
+    {
+        var index = Zones.IndexOf(zone);
+        if (index >= 0)
+        {
+            await FocusOnZoneAsync(index);
+        }
+    }
+
+    public async Task ClearPinsAsync()
+    {
+        await JS.InvokeVoidAsync("GoogleMaps.clearPins", ContainerId);
+    }
+
+    [JSInvokable]
+    public async Task UpdateLocation(double lat, double lng, double frequency)
+    {
+        _currentFrequency = frequency;
+        await OnLocationUpdated.InvokeAsync(new LatLng { Lat = lat, Lng = lng });
+        StateHasChanged();
+    }
+
+    public class LatLng
+    {
+        public double Lat { get; set; }
+        public double Lng { get; set; }
+    }
+
+    public class MapPin
+    {
+        public LatLng Position { get; set; } = new();
+        public string? IconUrl { get; set; }
+        public string? Glyph { get; set; }          // e.g. "A", "★", emoji
+        public string? GlyphColor { get; set; }
+        public string? CustomColor { get; set; }    // pin background
+        public string? BorderColor { get; set; }
+        public double? Scale { get; set; }
+        public string? Title { get; set; }
+        public string? Content { get; set; }        // HTML popup
+        public double? Radius { get; set; }         // meters
+    }
+
+    public class MapZone
+    {
+        public List<LatLng> Paths { get; set; } = new();
+        public string? FillColor { get; set; }
+        public string? StrokeColor { get; set; }
+        public List<LatLng> EntryPoints { get; set; } = new();
+        public List<LatLng> ExitPoints { get; set; } = new();
+    }
+
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
+    }
+}

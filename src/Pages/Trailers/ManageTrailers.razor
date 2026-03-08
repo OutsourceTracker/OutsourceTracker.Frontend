@@ -1,6 +1,7 @@
 ﻿@page "/trailers/"
 @page "/trailers/{TrailerId:guid?}"
 @using Microsoft.AspNetCore.Authorization
+@using OutsourceTracker.Components.GoogleMaps
 @using OutsourceTracker.Models.Trailers
 @using OutsourceTracker.Services
 @using OutsourceTracker.Pages.Trailers.Components
@@ -65,10 +66,11 @@
 
             <div class="flex-grow-1 d-flex flex-column p-3 pt-0 map-section">
                 <h5 class="mb-3">Location Map</h5>
-                <TrailerMap @ref="trailerMap"
-                            Height="100%"
-                            SelectedTrailer="selectedTrailer"
-                            AllTrailers="trailers" />
+                <GoogleMaps @ref="trailerMap"
+                            GoogleMapsApiKey="YOUR_GOOGLE_MAPS_API_KEY_HERE"
+                            AutoFitOnLoad="true"
+                            EnableClustering="true"
+                            MapId="91655a72ee45e0e184bfe567" />
             </div>
         </div>
     </div>
@@ -86,7 +88,7 @@
     private bool showDeleteModal;
 
     private TrailerList? trailerList;
-    private TrailerMap? trailerMap;
+    private GoogleMaps? trailerMap;
     private TrailerSpotModal? spotModal;
 
     [Parameter] public Guid? TrailerId { get; set; }
@@ -104,23 +106,14 @@
 
     private async Task SelectTrailerAsync(TrailerViewModel? trailer)
     {
-        if (trailer == selectedTrailer) return;
+        if (trailer == selectedTrailer || trailer == null) return;
 
-        if (selectedTrailer != null)
+        if (trailer.Location.HasValue)
         {
-            await trailerMap?.RemoveMarkerAsync(selectedTrailer.Id.ToString("N"));
+            await trailerMap?.FocusOnPositionAsync(new() { Lat = trailer.Location.Value.X, Lng = trailer.Location.Value.Y });
         }
 
         selectedTrailer = trailer;
-
-        if (trailer != null)
-        {
-            await trailerMap?.FocusOnTrailerAsync(trailer);
-        }
-        else
-        {
-            await trailerMap?.ClearFocusAsync();
-        }
     }
 
     private async Task ToggleTrailerInSelection(TrailerViewModel trailer)
@@ -145,6 +138,23 @@
             .OrderByDescending(t => t.LocatedDate.HasValue)
             .ThenByDescending(t => t.LocatedDate)
             .ToListAsync();
+
+        if (trailerMap != null)
+        {
+            await trailerMap.ClearPinsAsync();
+            foreach (var trailer in trailers)
+            {
+                if (trailer.Location.HasValue)
+                {
+                    await trailerMap.AddPin(new GoogleMaps.MapPin
+                    {
+                        Title = trailer.FullName,
+                        IconUrl = "https://seekicon.com/free-icon-download/trailer_1.png",
+                        Position = new GoogleMaps.LatLng { Lat = trailer.Location.Value.X, Lng = trailer.Location.Value.Y }
+                    });
+                }
+            }
+        }
 
         if (TrailerId.HasValue)
         {
@@ -200,8 +210,8 @@
         {
             trailers?.Remove(selectedTrailer);
             selectedTrailers.Remove(selectedTrailer);
-            await trailerList?.RefreshAsync();
-            await trailerMap?.RemoveMarkerAsync(selectedTrailer.Id.ToString("N"));
+            //await trailerList?.RefreshAsync();
+            //await trailerMap?.RemoveMarkerAsync(selectedTrailer.Id.ToString("N"));
             selectedTrailer = null;
         }
 
