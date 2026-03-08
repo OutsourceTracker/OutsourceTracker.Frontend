@@ -25,7 +25,7 @@ public class AppVersionService
     private VersionInfo? _remoteVersion;
     private DateTime _lastRemoteCheck = DateTime.MinValue;
 
-    private const string LocalStorageKey = "OutsourceTracker:AppVersion";
+    private const string LocalStorageKey = "appVersionInfo";
     private const int RemoteCheckIntervalMinutes = 10;
 
     /// <summary>
