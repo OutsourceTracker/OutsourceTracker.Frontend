@@ -1,0 +1,15 @@
+﻿@media (max-width: 576px) {
+    .dropdown-menu {
+        width: 100vw !important;
+        max-width: none !important;
+        left: 0 !important;
+        right: auto !important;
+        transform: none !important;
+        border-radius: 0;
+    }
+
+        .dropdown-menu.show {
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+}
