@@ -48,7 +48,6 @@
     [Inject] private AppVersionService VersionService { get; init; } = default!;
     [Inject] private ILogger<MainLayout> Logger { get; init; } = default!;
     [Inject] private IJSRuntime JS { get; init; } = default!;
-    private DotNetObjectReference<MainLayout>? _dotNetRef;
 
     private Timer? _updateTimer;
     private bool UpdateDismissedThisSession { get; set; }
@@ -64,10 +63,7 @@
 
             // Poll every 3 minutes (adjust as needed – 2 min is aggressive)
             _updateTimer = new Timer(async _ => await CheckForUpdateAsync(), null,
-                TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(3));
-
-            _dotNetRef = DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("window.application.registerLayoutComponent", _dotNetRef);
+                TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(3));
         }
     }
 
@@ -104,19 +100,5 @@
     {
         _updateTimer?.Dispose();
         _updateTimer = null;
-
-        if (_dotNetRef != null)
-        {
-            await JS.InvokeVoidAsync("window.application.unregisterLayoutComponent");
-            _dotNetRef.Dispose();
-            _dotNetRef = null;
-        }
-    }
-
-    [JSInvokable]
-    public async Task ForceUpdateCheck()
-    {
-        await VersionService.CheckRemoteVersionAsync(true);
-        await CheckForUpdateAsync();
     }
 }

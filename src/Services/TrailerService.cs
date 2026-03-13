@@ -6,21 +6,16 @@ using System.Runtime.CompilerServices;
 
 namespace OutsourceTracker.Services;
 
-public class TrailerService : IModelCreateService<TrailerViewModel, HttpResponseMessage>, IModelLookupService<TrailerViewModel>, IModelDeleteService<TrailerViewModel, HttpResponseMessage>, IModelUpdateService<TrailerViewModel, HttpResponseMessage>, ITrackableLocationService<TrailerViewModel, HttpResponseMessage>
+public class TrailerService : BaseBackendService, IModelCreateService<TrailerViewModel, HttpResponseMessage>, IModelLookupService<TrailerViewModel>, IModelDeleteService<TrailerViewModel, HttpResponseMessage>, IModelUpdateService<TrailerViewModel, HttpResponseMessage>, ITrackableLocationService<TrailerViewModel, HttpResponseMessage>
 {
-    protected HttpClient Client { get; }
-    protected ILogger Logger { get; }
-
-    public TrailerService(IHttpClientFactory http, ILogger<TrailerService> logger)
+    public TrailerService(IServiceProvider sp) : base(sp)
     {
-        Client = http.CreateClient("API");
-        Logger = logger;
     }
 
     public async Task<HttpResponseMessage> Create(CancellationToken cancellationToken = default)
     {
-        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Post, "trailers");
-        return await Client.SendAsync(message, cancellationToken);
+        using HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Post, "trailers");
+        return await SendMessage(message, cancellationToken);
     }
 
     public async Task<TrailerViewModel?> Get(Guid id, CancellationToken cancellationToken = default)
@@ -30,33 +25,18 @@ public class TrailerService : IModelCreateService<TrailerViewModel, HttpResponse
             throw new ArgumentException("Value cannot be empty.", nameof(id));
         }
 
-        return await Client.GetFromJsonAsync<TrailerViewModel>($"trailers/{id}", cancellationToken);
+        var message = new HttpRequestMessage(HttpMethod.Get, $"trailers/{id}");
+        using var response = await SendMessage(message, cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<TrailerViewModel>();
     }
 
     public async IAsyncEnumerable<TrailerViewModel> Search(object? searchOptions = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Get, "trailers");
+        using HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Get, "trailers");
 
-        //if (query != null)
-        //{
-        //    var query = System.Web.HttpUtility.ParseQueryString(string.Empty);
-        //    if (!string.IsNullOrWhiteSpace(request.Prefix))
-        //    {
-        //        query["prefix"] = request.Prefix;
-        //    }
-        //    if (!string.IsNullOrWhiteSpace(request.Name))
-        //    {
-        //        query["name"] = request.Name;
-        //    }
-        //    if (!string.IsNullOrWhiteSpace(request.SpottedBy))
-        //    {
-        //        query["spottedBy"] = request.SpottedBy;
-        //    }
-        //    string queryString = query.ToString() ?? string.Empty;
-        //    message.RequestUri = new Uri($"{message.RequestUri}?{queryString}", UriKind.Relative);
-        //}
-
-        HttpResponseMessage response = await Client.SendAsync(message, cancellationToken);
+        using HttpResponseMessage response = await SendMessage(message, cancellationToken);
         response.EnsureSuccessStatusCode();
         var haystack = response.Content.ReadFromJsonAsAsyncEnumerable<TrailerViewModel>(cancellationToken);
         await foreach (var item in haystack)
@@ -71,7 +51,7 @@ public class TrailerService : IModelCreateService<TrailerViewModel, HttpResponse
     public async Task<HttpResponseMessage> Delete(Guid id, CancellationToken cancellationToken = default)
     {
         HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Delete, $"trailers/{id}");
-        return await Client.SendAsync(message, cancellationToken);
+        return await SendMessage(message, cancellationToken);
     }
 
     public async Task<HttpResponseMessage> Update(Guid id, object request, CancellationToken cancellationToken = default)
@@ -83,7 +63,7 @@ public class TrailerService : IModelCreateService<TrailerViewModel, HttpResponse
             message.Content = JsonContent.Create(request);
         }
 
-        return await Client.SendAsync(message, cancellationToken);
+        return await SendMessage(message, cancellationToken);
     }
 
     public async Task<HttpResponseMessage> UpdateLocation(Guid id, Vector2 mapCoordinates, double? accuracy = null, CancellationToken cancellationToken = default)
@@ -97,6 +77,6 @@ public class TrailerService : IModelCreateService<TrailerViewModel, HttpResponse
 
         HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Put, messageUri);
         message.Content = JsonContent.Create(mapCoordinates);
-        return await Client.SendAsync(message);
+        return await SendMessage(message, cancellationToken);
     }
 }
