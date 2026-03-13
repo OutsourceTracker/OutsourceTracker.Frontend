@@ -1,20 +1,21 @@
 ﻿export function setupNavbarClose() {
-    // Find all nav links inside the navbar (adjust selector if your structure differs)
-    document.querySelectorAll('.navbar-nav .nav-link, .navbar-nav .dropdown-item').forEach(link => {
-        link.addEventListener('click', () => {
-            const collapseEl = document.querySelector('.navbar-collapse.show');
-            if (collapseEl) {
-                // Use Bootstrap 5 Collapse API to hide it
-                const bsCollapse = bootstrap.Collapse.getInstance(collapseEl) || new bootstrap.Collapse(collapseEl, { toggle: false });
-                bsCollapse.hide();
-            }
+    console.log('setupNavbarClose called from Blazor');
 
-            // Optional: reset toggler button aria/state
+    const navbarCollapse = document.querySelector('#navbarNav');
+    if (!navbarCollapse) return;
+
+    document.addEventListener('click', function (event) {
+        const isClickInside = navbarCollapse.contains(event.target) ||
+            document.querySelector('.navbar-toggler').contains(event.target);
+        if (!isClickInside && navbarCollapse.classList.contains('show')) {
             const toggler = document.querySelector('.navbar-toggler');
-            if (toggler) {
-                toggler.classList.add('collapsed');
-                toggler.setAttribute('aria-expanded', 'false');
-            }
-        });
+            toggler.click();  // Simulate toggle to close
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && navbarCollapse.classList.contains('show')) {
+            document.querySelector('.navbar-toggler').click();
+        }
     });
 }

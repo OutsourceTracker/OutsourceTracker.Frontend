@@ -1,4 +1,5 @@
 ﻿@inherits LayoutComponentBase
+@implements IAsyncDisposable
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.WebAssembly.Authentication
@@ -8,112 +9,114 @@
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top shadow-sm">
-    <div class="container-fluid">
-        <a class="navbar-brand fw-bold" href="/">
-            <i class="bi bi-truck me-2"></i>Outsource Tracker
-        </a>
+<div class="top-nav-wrapper">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <i class="bi bi-truck me-2"></i>Outsource Tracker
+            </a>
 
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
 
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <!-- Left navigation -->
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Home</NavLink>
-                </li>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <!-- Left navigation -->
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Home</NavLink>
+                    </li>
 
+                    <AuthorizeView>
+                        <Authorized>
+                            <!-- Trailers -->
+                            @if (context.User.HasRolePrefix("Trailers."))
+                            {
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Trailers</a>
+                                    <ul class="dropdown-menu">
+                                        @if (context.User.IsInRole(ApplicationRole.TrailerViewer))
+                                        {
+                                            <li><NavLink class="dropdown-item" href="/trailers/">Manage Trailers</NavLink></li>
+                                        }
+                                        @if (context.User.IsInRole(ApplicationRole.TrailerAdmin))
+                                        {
+                                            <li><NavLink class="dropdown-item" href="/trailer/create">Create Trailer</NavLink></li>
+                                        }
+                                        @if (context.User.IsInRole(ApplicationRole.TrailerSpotter))
+                                        {
+                                            <li><NavLink class="dropdown-item" href="/trailer/spot">Spot Trailer</NavLink></li>
+                                        }
+                                    </ul>
+                                </li>
+                            }
+
+                            <!-- Zones -->
+                            @if (context.User.HasRolePrefix("Zones."))
+                            {
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Zones</a>
+                                    <ul class="dropdown-menu">
+                                        @if (context.User.IsInRole(ApplicationRole.ZoneAdmin))
+                                        {
+                                            <li><NavLink class="dropdown-item" href="/zone/create">Create Zone</NavLink></li>
+                                        }
+                                    </ul>
+                                </li>
+                            }
+
+                            <!-- Add your other dropdowns (Tractors, Drivers, Routes) here the same way -->
+                        </Authorized>
+                    </AuthorizeView>
+
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Tools</a>
+                        <ul class="dropdown-menu">
+                            <li><NavLink class="dropdown-item" href="/tools/tandem-calculator">Tandem Calculator</NavLink></li>
+                        </ul>
+                    </li>
+                </ul>
+
+                <!-- Right-aligned auth section -->
                 <AuthorizeView>
                     <Authorized>
-                        <!-- Trailers -->
-                        @if (context.User.HasRolePrefix("Trailers."))
-                        {
-                            <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Trailers</a>
-                                <ul class="dropdown-menu">
-                                    @if (context.User.IsInRole(ApplicationRole.TrailerViewer))
-                                    {
-                                        <li><NavLink class="dropdown-item" href="/trailers/">Manage Trailers</NavLink></li>
-                                    }
-                                    @if (context.User.IsInRole(ApplicationRole.TrailerAdmin))
-                                    {
-                                        <li><NavLink class="dropdown-item" href="/trailer/create">Create Trailer</NavLink></li>
-                                    }
-                                    @if (context.User.IsInRole(ApplicationRole.TrailerSpotter))
-                                    {
-                                        <li><NavLink class="dropdown-item" href="/trailer/spot">Spot Trailer</NavLink></li>
-                                    }
+                        <!-- Profile dropdown pushed to right with gap -->
+                        <div class="ms-auto d-flex align-items-center gap-3">
+                            <div class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 text-white text-decoration-none"
+                                   href="#" role="button" data-bs-toggle="dropdown">
+                                    <img src="@AvatarUrl" class="rounded-circle border border-light" width="32" height="32" alt="Avatar" />
+                                    <span class="fw-semibold d-none d-md-inline">@DisplayName</span>
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end dropdown-menu-lg-start">
+                                    <li class="dropdown-header">
+                                        <strong>@DisplayName</strong><br />
+                                        <small class="text-muted">@Email</small>
+                                    </li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li><NavLink class="dropdown-item" href="/profile">View Profile</NavLink></li>
+                                    <li><NavLink class="dropdown-item" href="/settings">Settings</NavLink></li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li><a class="dropdown-item text-danger" @onclick="Logout">Logout</a></li>
                                 </ul>
-                            </li>
-                        }
-
-                        <!-- Zones -->
-                        @if (context.User.HasRolePrefix("Zones."))
-                        {
-                            <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Zones</a>
-                                <ul class="dropdown-menu">
-                                    @if (context.User.IsInRole(ApplicationRole.ZoneAdmin))
-                                    {
-                                        <li><NavLink class="dropdown-item" href="/zone/create">Create Zone</NavLink></li>
-                                    }
-                                </ul>
-                            </li>
-                        }
-
-                        <!-- Add your other dropdowns (Tractors, Drivers, Routes) here the same way -->
-                    </Authorized>
-                </AuthorizeView>
-
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Tools</a>
-                    <ul class="dropdown-menu">
-                        <li><NavLink class="dropdown-item" href="/tools/tandem-calculator">Tandem Calculator</NavLink></li>
-                    </ul>
-                </li>
-            </ul>
-
-            <!-- Right-aligned auth section -->
-            <AuthorizeView>
-                <Authorized>
-                    <!-- Profile dropdown pushed to right with gap -->
-                    <div class="ms-auto d-flex align-items-center gap-3">
-                        <div class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 text-white text-decoration-none"
-                               href="#" role="button" data-bs-toggle="dropdown">
-                                <img src="@AvatarUrl" class="rounded-circle border border-light" width="32" height="32" alt="Avatar" />
-                                <span class="fw-semibold d-none d-md-inline">@DisplayName</span>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end dropdown-menu-lg-start">
-                                <li class="dropdown-header">
-                                    <strong>@DisplayName</strong><br />
-                                    <small class="text-muted">@Email</small>
-                                </li>
-                                <li><hr class="dropdown-divider" /></li>
-                                <li><NavLink class="dropdown-item" href="/profile">View Profile</NavLink></li>
-                                <li><NavLink class="dropdown-item" href="/settings">Settings</NavLink></li>
-                                <li><hr class="dropdown-divider" /></li>
-                                <li><a class="dropdown-item text-danger" @onclick="Logout">Logout</a></li>
-                            </ul>
+                            </div>
                         </div>
-                    </div>
-                </Authorized>
+                    </Authorized>
 
-                <NotAuthorized>
-                    <!-- Login button pushed to right -->
-                    <div class="ms-auto mt-2 mt-lg-0">
-                        <button class="btn btn-outline-light fw-semibold px-4 py-2"
-                                @onclick="LoginWithMicrosoft">
-                            <i class="bi bi-box-arrow-in-right me-2"></i>Sign in with Microsoft
-                        </button>
-                    </div>
-                </NotAuthorized>
-            </AuthorizeView>
+                    <NotAuthorized>
+                        <!-- Login button pushed to right -->
+                        <div class="ms-auto mt-2 mt-lg-0">
+                            <button class="btn btn-outline-light fw-semibold px-4 py-2"
+                                    @onclick="LoginWithMicrosoft">
+                                <i class="bi bi-box-arrow-in-right me-2"></i>Sign in with Microsoft
+                            </button>
+                        </div>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
         </div>
-    </div>
-</nav>
+    </nav>
+</div>
 
 @code {
     private string DisplayName = "User";
@@ -122,7 +125,7 @@
     private bool IsAuthenticated = false;
 
     [Inject] private UserPhotoService PhotoService { get; init; } = default!;
-    private IJSObjectReference? _jsModule;
+    private IJSObjectReference? topNavModule;
 
     protected override async Task OnInitializedAsync()
     {
@@ -149,8 +152,12 @@
     {
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./TopNav.razor.js");
-            await _jsModule.InvokeVoidAsync("setupNavbarClose");
+            topNavModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Layout/TopNav.razor.js");
+
+            if (topNavModule != null)
+            {
+                await topNavModule.InvokeVoidAsync("setupNavbarClose");
+            }
 
             if (IsAuthenticated)
             {
@@ -176,5 +183,13 @@
     {
         await PhotoService.ClearCacheAsync();
         Navigation.NavigateToLogout("/authentication/logout");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (topNavModule != null)
+        {
+            await topNavModule.DisposeAsync();
+        }
     }
 }

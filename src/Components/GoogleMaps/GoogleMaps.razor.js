@@ -1,45 +1,67 @@
-﻿window.GoogleMaps = window.GoogleMaps || {};
-GoogleMaps.maps = GoogleMaps.maps || {};
+﻿const maps = new Map();
 
-GoogleMaps.ensureLoaded = function (apiKey) {
+async function ensureGoogleMapsLoaded() {
+    if (window.google?.maps?.importLibrary) return;
+
     return new Promise((resolve, reject) => {
-        if (window.google?.maps?.importLibrary) {
-            resolve();
-            return;
-        }
-
-        const script = document.createElement('script');
-        script.async = true;
-        script.defer = true;
-
-        const params = new URLSearchParams({
-            key: apiKey,
-            v: 'weekly',
-            callback: 'google.maps.__ib__'
-        });
-
-        script.src = `https://maps.googleapis.com/maps/api/js?${params}`;
-
-        window.google = window.google || {};
-        window.google.maps = window.google.maps || {};
-        const maps = window.google.maps;
-
-        maps.__ib__ = () => {
-            maps.importLibrary = (name) => Promise.resolve(maps[name] || Promise.reject(`Library ${name} unavailable`));
-            resolve();
+        const config = {
+            key: "YOUR_GOOGLE_MAPS_API_KEY_HERE",
+            v: "weekly",
+            language: "en",
+            region: "US",
+            authReferrerPolicy: "origin"
         };
 
-        script.onerror = () => reject(new Error('Google Maps load failed'));
-        document.head.appendChild(script);
-    });
-};
+        // Split declarations: use let for vars assigned later
+        let h, a, k;
+        const p = "The Google Maps JavaScript API";
+        const c = "google";
+        const l = "importLibrary";
+        const q = "__ib__";
+        const m = document;
+        let b = window;
+        b = b[c] || (b[c] = {});
+        let d = b.maps || (b.maps = {});
+        const r = new Set();
+        const e = new URLSearchParams();
 
-GoogleMaps.loadMarkerClusterer = function () {
-    return new Promise((resolve, reject) => {
-        if (window.markerClusterer?.MarkerClusterer) {
-            resolve();
-            return;
+        const u = () => h || (h = new Promise(async (f, n) => {
+            a = m.createElement("script");
+            e.set("libraries", [...r] + "");
+            for (k in config) {
+                e.set(
+                    k.replace(/[A-Z]/g, t => "_" + t[0].toLowerCase()),
+                    config[k]
+                );
+            }
+            e.set("callback", c + ".maps." + q);
+            a.src = `https://maps.${c}apis.com/maps/api/js?` + e;
+            d[q] = f;
+            a.onerror = () => { h = n(Error(p + " could not load.")); };
+            a.nonce = m.querySelector("script[nonce]")?.nonce || "";
+            m.head.append(a);
+        }));
+
+        if (d[l]) {
+            console.warn(p + " only loads once. Ignoring:", config);
+        } else {
+            d[l] = (f, ...n) => r.add(f) && u().then(() => d[l](f, ...n));
         }
+
+        google.maps.importLibrary("maps")
+            .then(resolve)
+            .catch(reject);
+
+        console.log(`Initialized Map Object!`);
+    });
+}
+
+async function loadMarkerClusterer() {
+    if (window.markerClusterer?.MarkerClusterer) {
+        return;
+    }
+
+    return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = 'https://unpkg.com/@googlemaps/markerclusterer@2/dist/index.min.js';
         script.async = true;
@@ -47,21 +69,23 @@ GoogleMaps.loadMarkerClusterer = function () {
         script.onerror = reject;
         document.head.appendChild(script);
     });
-};
+}
 
-GoogleMaps.init = async function (containerId, apiKey, lat, lng, zoom, dotNetRef, mapId = 'DEMO_MAP_ID') {
-    await GoogleMaps.ensureLoaded(apiKey);
-    await GoogleMaps.loadMarkerClusterer();
+export async function init(containerId, lat, lng, zoom, dotNetRef, mapId = 'DEMO_MAP_ID') {
+    console.log(`[GoogleMaps] init called for container: ${containerId}`);
+    await ensureGoogleMapsLoaded();
+    await loadMarkerClusterer();
 
-    const { Map } = await google.maps.importLibrary('maps');
-    const { AdvancedMarkerElement, PinElement } = await google.maps.importLibrary('marker');
-    await google.maps.importLibrary('geometry');
+    const { Map } = await google.maps.importLibrary("maps");
+    const { AdvancedMarkerElement, PinElement } = await google.maps.importLibrary("marker");
+    await google.maps.importLibrary("geometry");
 
     const map = new Map(document.getElementById(containerId), {
         center: { lat, lng },
         zoom,
         mapId,
-        gestureHandling: 'greedy'
+        gestureHandling: 'greedy',
+        mapTypeId: 'hybrid'
     });
 
     const clusterer = new markerClusterer.MarkerClusterer({
@@ -71,13 +95,16 @@ GoogleMaps.init = async function (containerId, apiKey, lat, lng, zoom, dotNetRef
             render: ({ count, position }) => new google.maps.Marker({
                 label: { text: String(count), color: 'white', fontSize: '12px' },
                 position,
-                icon: { url: 'https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/m1.png', scaledSize: new google.maps.Size(53, 53) },
+                icon: {
+                    url: 'https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/m1.png',
+                    scaledSize: new google.maps.Size(53, 53)
+                },
                 zIndex: 1000 + count
             })
         }
     });
 
-    GoogleMaps.maps[containerId] = {
+    maps.set(containerId, {
         map,
         clusterer,
         markers: [],
@@ -92,44 +119,76 @@ GoogleMaps.init = async function (containerId, apiKey, lat, lng, zoom, dotNetRef
         AdvancedMarkerElement,
         PinElement,
         geometry: google.maps.geometry
-    };
-};
+    });
 
-GoogleMaps.addPin = function (containerId, options) {
-    const ctx = GoogleMaps.maps[containerId];
-    if (!ctx) return;
+    await dotNetRef.invokeMethodAsync("OnMapInitialized", containerId);
+    console.log(`[GoogleMaps] init completed for ${containerId}`);
+}
 
-    const position = { lat: options.Position.Lat, lng: options.Position.Lng };
+export function addPin(containerId, options) {
+    console.debug(`addPin: Called for ${containerId}`, options);
+    const ctx = maps.get(containerId);
+    if (!ctx) {
+        console.warn(`[GoogleMaps] addPin: context not found for ${containerId}`);
+        return;
+    }
 
-    let pinContent;
-    if (options.CustomColor || options.Glyph) {
-        pinContent = new ctx.PinElement({
-            glyph: options.Glyph || undefined,
-            glyphColor: options.GlyphColor || 'white',
-            background: options.CustomColor || '#FF0000',
-            borderColor: options.BorderColor || '#000',
-            scale: options.Scale || 1.2
-        }).element;
-    } else if (options.IconUrl) {
-        pinContent = document.createElement('img');
-        pinContent.src = options.IconUrl;
-        pinContent.style.width = '32px';
-        pinContent.style.height = '32px';
-        pinContent.style.borderRadius = '50%';
+    if (!options || !options.position) {
+        console.error("[addPin] Missing or invalid options.Position", options);
+        return;
+    }
+
+    const pos = options.position;
+    const lat = pos.lat;
+    const lng = pos.lng;
+
+    if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) {
+        console.error("[addPin] Invalid lat/lng values", { lat, lng, fullPos: pos });
+        return;
+    }
+
+    const position = { lat, lng };
+
+    let pinContent = null;
+
+    if (options.customColor || options.glyph || options.glyphText || options.glyphSrc) {
+        const pinOptions = {
+            background: options.customColor || '#FF0000',
+            borderColor: options.borderColor || '#000',
+            glyphColor: options.glyphColor || 'white',
+            scale: options.scale || 1.2,
+            glyphText: options.glyphText || options.glyph || undefined,
+            glyphSrc: options.glyphSrc || undefined                     
+        };
+
+        if (options.glyph && !options.glyphSrc && !options.glyphText) {
+            pinOptions.glyphText = options.glyph;
+        }
+
+        const pin = new ctx.PinElement(pinOptions);
+        pinContent = pin;
+    } else if (options.iconUrl) {
+        const img = document.createElement('img');
+        img.src = options.iconUrl;
+        img.style.width = '32px';
+        img.style.height = '32px';
+        img.style.borderRadius = '50%';
+        img.style.objectFit = 'cover';
+        pinContent = img;
     }
 
     const marker = new ctx.AdvancedMarkerElement({
         map: ctx.map,
         position,
-        title: options.Title,
+        title: options.title,
         content: pinContent
     });
 
     ctx.markers.push(marker);
-    if (ctx.clusterer) ctx.clusterer.addMarker(marker);
+    ctx.clusterer?.addMarker(marker);
 
-    if (options.Content) {
-        const infoWindow = new google.maps.InfoWindow({ content: options.Content });
+    if (options.content) {
+        const infoWindow = new google.maps.InfoWindow({ content: options.content });
         marker.addListener('gmp-click', () => {
             ctx.infoWindows.forEach(iw => iw.close());
             infoWindow.open({ anchor: marker, map: ctx.map });
@@ -137,11 +196,11 @@ GoogleMaps.addPin = function (containerId, options) {
         ctx.infoWindows.push(infoWindow);
     }
 
-    if (options.Radius) {
+    if (options.radius) {
         const circle = new google.maps.Circle({
             map: ctx.map,
             center: position,
-            radius: options.Radius,
+            radius: options.radius,
             strokeColor: '#FF0000',
             strokeOpacity: 0.8,
             strokeWeight: 2,
@@ -150,18 +209,18 @@ GoogleMaps.addPin = function (containerId, options) {
         });
         ctx.circles.push(circle);
     }
-};
+}
 
-GoogleMaps.addZone = function (containerId, options) {
-    const ctx = GoogleMaps.maps[containerId];
+export function addZone(containerId, options) {
+    const ctx = maps.get(containerId);
     if (!ctx) return;
 
     const polygon = new google.maps.Polygon({
-        paths: options.Paths,
-        strokeColor: options.StrokeColor || '#008000',
+        paths: options.paths,
+        strokeColor: options.strokeColor || '#008000',
         strokeOpacity: 0.8,
         strokeWeight: 2,
-        fillColor: options.FillColor || '#00FF0044',
+        fillColor: options.fillColor || '#00FF0044',
         fillOpacity: 0.35,
         map: ctx.map
     });
@@ -169,25 +228,25 @@ GoogleMaps.addZone = function (containerId, options) {
 
     options.Entries.forEach(e => {
         new google.maps.Marker({
-            position: { lat: e.Lat, lng: e.Lng },
+            position: { lat: e.lat, lng: e.lng },
             map: ctx.map,
             icon: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
-            title: 'Entry'
+            title: 'Entry Point'
         });
     });
 
     options.Exits.forEach(x => {
         new google.maps.Marker({
-            position: { lat: x.Lat, lng: x.Lng },
+            position: { lat: x.lat, lng: x.lng },
             map: ctx.map,
             icon: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
-            title: 'Exit'
+            title: 'Exit Point'
         });
     });
-};
+}
 
-GoogleMaps.toggleCurrentLocation = function (containerId, show, intervalMs) {
-    const ctx = GoogleMaps.maps[containerId];
+export function toggleCurrentLocation(containerId, show, intervalMs) {
+    const ctx = maps.get(containerId);
     if (!ctx) return;
 
     if (!show) {
@@ -225,7 +284,6 @@ GoogleMaps.toggleCurrentLocation = function (containerId, show, intervalMs) {
                 ctx.currentLocationMarker.position = position;
             }
 
-            // Breathing wave
             if (ctx.waveCircle) ctx.waveCircle.setMap(null);
             ctx.waveCircle = new google.maps.Circle({
                 map: ctx.map,
@@ -252,20 +310,19 @@ GoogleMaps.toggleCurrentLocation = function (containerId, show, intervalMs) {
 
             ctx.dotNetRef.invokeMethodAsync('UpdateLocation', lat, lng, frequency);
         },
-        err => console.error(err),
+        err => console.error('Geolocation error:', err),
         { enableHighAccuracy: true, timeout: intervalMs, maximumAge: 0 }
     );
-};
+}
 
-GoogleMaps.fitToAllMarkers = function (containerId, padding = 60) {
-    const ctx = GoogleMaps.maps[containerId];
-    if (!ctx || (ctx.markers.length === 0 && ctx.polygons.length === 0 && !ctx.currentLocationMarker)) return;
+export function fitToAllMarkers(containerId, padding = 60) {
+    const ctx = maps.get(containerId);
+    if (!ctx) return;
 
     const bounds = new google.maps.LatLngBounds();
 
     ctx.markers.forEach(m => {
-        const pos = m.position;
-        if (pos) bounds.extend(pos);
+        if (m.position) bounds.extend(m.position);
     });
 
     ctx.polygons.forEach(p => {
@@ -274,36 +331,37 @@ GoogleMaps.fitToAllMarkers = function (containerId, padding = 60) {
         });
     });
 
-    if (ctx.currentLocationMarker) {
-        const pos = ctx.currentLocationMarker.position;
-        if (pos) bounds.extend(pos);
+    if (ctx.currentLocationMarker?.position) {
+        bounds.extend(ctx.currentLocationMarker.position);
     }
 
     if (!bounds.isEmpty()) {
         ctx.map.fitBounds(bounds, padding);
     }
-};
+}
 
-GoogleMaps.clearPins = function (containerId) {
-    const ctx = GoogleMaps.maps[containerId];
+export function clearPins(containerId) {
+    const ctx = maps.get(containerId);
     if (!ctx) return;
-    ctx.clusterer.clearMarkers();
+
+    ctx.clusterer?.clearMarkers();
     ctx.markers.forEach(m => { m.map = null; });
     ctx.markers = [];
     ctx.circles.forEach(c => c.setMap(null));
     ctx.circles = [];
-};
+}
 
-GoogleMaps.computeDistance = function (containerId, lat1, lng1, lat2, lng2) {
-    const ctx = GoogleMaps.maps[containerId];
+export function computeDistance(containerId, lat1, lng1, lat2, lng2) {
+    const ctx = maps.get(containerId);
     if (!ctx?.geometry?.spherical) return null;
+
     const from = new google.maps.LatLng(lat1, lng1);
     const to = new google.maps.LatLng(lat2, lng2);
     return google.maps.geometry.spherical.computeDistanceBetween(from, to);
-};
+}
 
-GoogleMaps.focusOnPosition = function (containerId, lat, lng, zoomLevel = null) {
-    const ctx = GoogleMaps.maps[containerId];
+export function focusOnPosition(containerId, lat, lng, zoomLevel = null) {
+    const ctx = maps.get(containerId);
     if (!ctx) return;
 
     const position = { lat, lng };
@@ -314,10 +372,10 @@ GoogleMaps.focusOnPosition = function (containerId, lat, lng, zoomLevel = null) 
     } else {
         ctx.map.panTo(position);
     }
-};
+}
 
-GoogleMaps.focusOnMarker = function (containerId, markerIndex, zoomLevel = 15) {
-    const ctx = GoogleMaps.maps[containerId];
+export function focusOnMarker(containerId, markerIndex, zoomLevel = 15) {
+    const ctx = maps.get(containerId);
     if (!ctx || markerIndex < 0 || markerIndex >= ctx.markers.length) return;
 
     const marker = ctx.markers[markerIndex];
@@ -330,10 +388,10 @@ GoogleMaps.focusOnMarker = function (containerId, markerIndex, zoomLevel = 15) {
         marker.content.classList.add('marker-focus-pulse');
         setTimeout(() => marker.content.classList.remove('marker-focus-pulse'), 2000);
     }
-};
+}
 
-GoogleMaps.focusOnZone = function (containerId, zoneIndex) {
-    const ctx = GoogleMaps.maps[containerId];
+export function focusOnZone(containerId, zoneIndex) {
+    const ctx = maps.get(containerId);
     if (!ctx || zoneIndex < 0 || zoneIndex >= ctx.polygons.length) return;
 
     const polygon = ctx.polygons[zoneIndex];
@@ -346,6 +404,6 @@ GoogleMaps.focusOnZone = function (containerId, zoneIndex) {
     if (!bounds.isEmpty()) {
         ctx.map.fitBounds(bounds, 60);
     }
-};
+}
 
-console.log('GoogleMaps fully loaded with Advanced Markers, clustering & geometry');
+console.log('[GoogleMaps module] loaded as ES module');

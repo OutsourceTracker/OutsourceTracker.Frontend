@@ -67,10 +67,11 @@
             <div class="flex-grow-1 d-flex flex-column p-3 pt-0 map-section">
                 <h5 class="mb-3">Location Map</h5>
                 <GoogleMaps @ref="trailerMap"
-                            GoogleMapsApiKey="YOUR_GOOGLE_MAPS_API_KEY_HERE"
+                            ContainerId="trailer-list-map"
                             AutoFitOnLoad="true"
                             EnableClustering="true"
-                            MapId="91655a72ee45e0e184bfe567" />
+                            MapId="91655a72ee45e0e184bfe567"
+                            OnMapReady="OnMapInitialized" />
             </div>
         </div>
     </div>
@@ -79,7 +80,6 @@
 @code {
     [Inject] private TrailerService TrailerService { get; set; } = null!;
     [Inject] private NavigationManager Navigation { get; set; } = null!;
-    [Inject] private IMapService Map { get; set; } = null!;
 
     private List<TrailerViewModel>? trailers;
     private TrailerViewModel? selectedTrailer;
@@ -99,8 +99,35 @@
     {
         if (firstRender)
         {
-            await Map.InitializeMapAsync();
             StateHasChanged();
+        }
+    }
+
+    private async Task OnMapInitialized()
+    {
+        if (trailerMap != null && trailers != null)
+        {
+            await trailerMap.ClearPinsAsync();
+            foreach (var trailer in trailers)
+            {
+                if (trailer.Location.HasValue)
+                {
+                    await trailerMap.AddPin(new GoogleMaps.MapPin
+                    {
+                        Title = trailer.FullName,
+                        Position = new GoogleMaps.LatLng { Lat = trailer.Location.Value.X, Lng = trailer.Location.Value.Y },
+                        Scale = 1.3,
+                        Content = $@"
+                                    <div style='min-width:180px;'>
+                                        <strong>{trailer.Prefix}{trailer.Name}</strong><br><br>
+                                        <strong>Last spotted:</strong><br>
+                                        By: {trailer.LocatedBy ?? "—"}<br>
+                                        On: {(trailer.LocatedDate.HasValue ? trailer.LocatedDate.Value.ToLocalTime().ToString("MM/dd/yyyy HH:mm") : "—")}<br>
+                                        Accuracy: {Math.Round(trailer.LocationAccuracy ?? 0, 1)} m
+                                    </div>"
+                    });
+                }
+            }
         }
     }
 
@@ -138,23 +165,6 @@
             .OrderByDescending(t => t.LocatedDate.HasValue)
             .ThenByDescending(t => t.LocatedDate)
             .ToListAsync();
-
-        if (trailerMap != null)
-        {
-            await trailerMap.ClearPinsAsync();
-            foreach (var trailer in trailers)
-            {
-                if (trailer.Location.HasValue)
-                {
-                    await trailerMap.AddPin(new GoogleMaps.MapPin
-                    {
-                        Title = trailer.FullName,
-                        IconUrl = "https://seekicon.com/free-icon-download/trailer_1.png",
-                        Position = new GoogleMaps.LatLng { Lat = trailer.Location.Value.X, Lng = trailer.Location.Value.Y }
-                    });
-                }
-            }
-        }
 
         if (TrailerId.HasValue)
         {

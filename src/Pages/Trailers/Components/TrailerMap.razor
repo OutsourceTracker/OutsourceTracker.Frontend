@@ -1,10 +1,8 @@
-﻿@using OutsourceTracker.Models.Trailers
+﻿@* @using OutsourceTracker.Models.Trailers
 @using OutsourceTracker.Services
 <div id="map" class="border rounded" style="height: @(Height);"></div>
 
 @code {
-    [Inject] private IMapService Map { get; set; } = null!;
-
     [Parameter] public string Height { get; set; } = "100%";
     [Parameter] public TrailerViewModel? SelectedTrailer { get; set; }
     [Parameter] public List<TrailerViewModel>? AllTrailers { get; set; }
@@ -77,4 +75,4 @@
             await Map.FocusMapMarker(trailer.Id.ToString("N"), zoomLevel: null);
         }
     }
-}
+} *@
