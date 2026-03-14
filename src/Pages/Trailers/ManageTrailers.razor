@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using OutsourceTracker.Components.GoogleMaps
 @using OutsourceTracker.Models.Trailers
+@using OutsourceTracker.Models.Zones
 @using OutsourceTracker.Services
 @using OutsourceTracker.Pages.Trailers.Components
 @attribute [Authorize(Roles = "Trailers.Read,Trailers.Write,Trailers.UpdateLocation")]
@@ -79,11 +80,13 @@
 
 @code {
     [Inject] private TrailerService TrailerService { get; set; } = null!;
+    [Inject] private ZoneService ZoneService { get; init; } = null;
     [Inject] private NavigationManager Navigation { get; set; } = null!;
 
     private List<TrailerViewModel>? trailers;
     private TrailerViewModel? selectedTrailer;
     private List<TrailerViewModel> selectedTrailers = new();
+    private List<ZoneViewModel> zones = new();
 
     private bool showDeleteModal;
 
@@ -107,6 +110,18 @@
     {
         if (trailerMap != null && trailers != null)
         {
+            foreach (var zn in zones)
+            {
+                GoogleMaps.MapZone zone = new()
+                {
+                    StrokeColor = "#0095ff",
+                    FillColor = "#00ecff",
+                    Paths = new List<GoogleMaps.LatLng>(zn.Boundry.Points.ToArray().Select(P => new GoogleMaps.LatLng() { Lat = P.X, Lng = P.Y }))
+                };
+
+                await trailerMap.AddZone(zone);
+            }
+
             await trailerMap.ClearPinsAsync();
             foreach (var trailer in trailers)
             {
@@ -170,6 +185,10 @@
         {
             selectedTrailer = trailers?.FirstOrDefault(t => t.Id == TrailerId);
         }
+
+        zones.Clear();
+        var zns = await ZoneService.Search().ToListAsync();
+        zones.AddRange(zns);
     }
 
     private void HandleSelectionChange()

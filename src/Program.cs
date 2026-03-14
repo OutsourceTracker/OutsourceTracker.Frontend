@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using OutsourceTracker.Geolocation;
 using OutsourceTracker.Models.Trailers;
+using OutsourceTracker.Models.Zones;
 using OutsourceTracker.Services;
 using OutsourceTracker.Services.ModelService;
 
@@ -58,6 +59,9 @@ namespace OutsourceTracker
                 .AddScoped<IModelLookupService<TrailerViewModel>>(sp => sp.GetRequiredService<TrailerService>())
                 .AddScoped<IModelUpdateService<TrailerViewModel, HttpResponseMessage>>(sp => sp.GetRequiredService<TrailerService>())
                 .AddScoped<ITrackableLocationService<TrailerViewModel, HttpResponseMessage>>(sp => sp.GetRequiredService<TrailerService>());
+
+            builder.Services.AddScoped<ZoneService>()
+                .AddScoped<IModelLookupService<ZoneViewModel>>(sp => sp.GetRequiredService<ZoneService>());
 
             await builder.Build().RunAsync();
         }

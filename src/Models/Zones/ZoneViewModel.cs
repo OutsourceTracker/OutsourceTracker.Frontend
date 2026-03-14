@@ -9,4 +9,6 @@ public class ZoneViewModel : IZone<Guid>
     public string Name { get; set; }
 
     public Polygon Boundry { get; set; }
+
+    public DateTimeOffset CreatedOn { get; set; }
 }
