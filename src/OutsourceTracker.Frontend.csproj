@@ -42,6 +42,10 @@
       <PackagePath>\</PackagePath>
     </None>
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\OutsourceTracker.Common\src\OutsourceTracker.Common.csproj" />
+  </ItemGroup>
   <ItemGroup>
     <None Update="package_icon.jpg">
       <Pack>True</Pack>
