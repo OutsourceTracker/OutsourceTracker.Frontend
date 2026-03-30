@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using OutsourceTracker.Geolocation;
 using OutsourceTracker.Models.Trailers;
 using OutsourceTracker.Services;
+using OutsourceTracker.Services.Authentication;
 using OutsourceTracker.Services.ModelService;
 
 namespace OutsourceTracker
@@ -15,40 +17,25 @@ namespace OutsourceTracker
             builder.RootComponents.Add<App>("#app");
             builder.RootComponents.Add<HeadOutlet>("head::after");
 
-            builder.Services.AddMsalAuthentication(options =>
-            {
-                builder.Configuration.Bind("AzureAd", options.ProviderOptions.Authentication);
-                options.ProviderOptions.DefaultAccessTokenScopes.Add("openid");
-                options.ProviderOptions.DefaultAccessTokenScopes.Add("profile");
-                options.ProviderOptions.DefaultAccessTokenScopes.Add("email");
-                options.ProviderOptions.DefaultAccessTokenScopes.Add("api://51032fa1-b18c-464f-9a43-34819040dfa7/access_as_user");
-                options.ProviderOptions.LoginMode = "redirect";
-                options.ProviderOptions.Cache.StoreAuthStateInCookie = true;
-                options.ProviderOptions.Authentication.PostLogoutRedirectUri = "/login";
-            });
-
             builder.Services
-                .AddScoped<ClientHeaderHandler>()
+                .AddScoped<AuthMessageHandler>()
                 .AddHttpClient("API", client =>
                 {
-
-                    //if (builder.HostEnvironment.IsDevelopment())
-                    //{
-                    //    client.BaseAddress = new Uri("https://localhost:7253/");
-                    //}
-                    //else
-                    //{
-                    //    client.BaseAddress = new Uri("https://api.vandersluistrucking.com/");
-                    //}
+#if DEBUG
+                    client.BaseAddress = new Uri("https://localhost:7253/");
+#else
                     client.BaseAddress = new Uri("https://api.vandersluistrucking.com/");
+#endif
                 })
-                .AddHttpMessageHandler<ClientHeaderHandler>();
+                .AddHttpMessageHandler<AuthMessageHandler>();
 
-            builder.Services.AddHttpClient("Graph", client =>
-            {
-                client.BaseAddress = new Uri("https://graph.microsoft.com");
-            });
+
             builder.Services.AddHttpClient();
+            
+            builder.Services.AddScoped<AuthenticationStateProvider, TokenService>()
+                .AddScoped<LoginService>()
+                .AddAuthorizationCore();
+
             builder.Services.AddScoped<UserPhotoService>();
             builder.Services.AddScoped<UserService>();
             builder.Services.AddScoped<AppVersionService>();
