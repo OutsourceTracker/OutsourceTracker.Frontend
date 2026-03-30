@@ -2,7 +2,6 @@
 @layout MainLayout
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
-@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @using OutsourceTracker.Services
 @using System.Text.Json
 
@@ -119,7 +118,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var user = await Users.GetClaim();
+        var user = await Users.GetClaimsPrincipalAsync();
 
         if (user.Identity?.IsAuthenticated == true)
         {
@@ -137,7 +136,7 @@
                     ?? "";
 
             Department = user.FindFirst("department")?.Value ?? "";
-            AvatarUrl = await PhotoService.GetAvatarUrlAsync(DisplayName);
+            AvatarUrl = await PhotoService.GetAvatarUrlAsync();
             Claims = user.Claims.ToList();
             await LoadRolesAsync(user);
         }
