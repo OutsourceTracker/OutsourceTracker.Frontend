@@ -1,7 +1,6 @@
 ﻿using OutsourceTracker.Equipment;
 using OutsourceTracker.Equipment.Trailers;
 using OutsourceTracker.Geolocation;
-using System.Text.Json.Serialization;
 
 namespace OutsourceTracker.Models.Trailers;
 
@@ -13,8 +12,7 @@ public class TrailerViewModel : ITrailer<Guid>
 
     public string Name { get; set; }
 
-    [JsonIgnore]
-    public string FullName => Prefix + Name;
+    public string FullName { get; set; }
 
     public TrailerType Type { get; set; }
 
