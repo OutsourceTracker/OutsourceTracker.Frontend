@@ -12,7 +12,7 @@ public class TrailerService : BaseBackendService, IModelCreateService<TrailerVie
     {
     }
 
-    public async Task<HttpResponseMessage> Create(CancellationToken cancellationToken = default)
+    public async Task<HttpResponseMessage> Create(TrailerViewModel? model = null, CancellationToken cancellationToken = default)
     {
         using HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Post, "trailers");
         return await SendMessage(message, cancellationToken);
