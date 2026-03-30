@@ -2,9 +2,9 @@
 @implements IAsyncDisposable
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
-@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @using OutsourceTracker.Services
 @using OutsourceTracker.Authorization
+@using OutsourceTracker.Services.Authentication
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
@@ -107,8 +107,8 @@
                         <!-- Login button pushed to right -->
                         <div class="ms-auto mt-2 mt-lg-0">
                             <button class="btn btn-outline-light fw-semibold px-4 py-2"
-                                    @onclick="LoginWithMicrosoft">
-                                <i class="bi bi-box-arrow-in-right me-2"></i>Sign in with Microsoft
+                                    @onclick="Login">
+                                <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
                             </button>
                         </div>
                     </NotAuthorized>
@@ -125,6 +125,7 @@
     private bool IsAuthenticated = false;
 
     [Inject] private UserPhotoService PhotoService { get; init; } = default!;
+    [Inject] private LoginService login { get; init; } = default!;
     private IJSObjectReference? topNavModule;
 
     protected override async Task OnInitializedAsync()
@@ -144,7 +145,7 @@
                  ?? "";
 
             string name = Uri.EscapeDataString(DisplayName);
-            AvatarUrl = await PhotoService.GetAvatarUrlAsync(DisplayName);
+            AvatarUrl = await PhotoService.GetAvatarUrlAsync();
         }
     }
 
@@ -163,7 +164,7 @@
             {
                 try
                 {
-                    var realAvatar = await PhotoService.GetAvatarUrlAsync(DisplayName);
+                    var realAvatar = await PhotoService.GetAvatarUrlAsync(512);
                     if (realAvatar != AvatarUrl)
                     {
                         AvatarUrl = realAvatar;
@@ -177,12 +178,11 @@
         }
     }
 
-    private void LoginWithMicrosoft() => Navigation.NavigateToLogin("/authentication/login");
+    private void Login() => Navigation.NavigateTo("/login");
 
     private async Task Logout()
     {
-        await PhotoService.ClearCacheAsync();
-        Navigation.NavigateToLogout("/authentication/logout");
+        await login.LogoutAsync();
     }
 
     public async ValueTask DisposeAsync()
