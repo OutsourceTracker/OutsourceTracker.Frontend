@@ -1,0 +1,146 @@
+﻿@page "/register"
+@using System.ComponentModel.DataAnnotations
+@using OutsourceTracker.Authentication
+@layout EmptyLayout
+
+<PageTitle>Register - Outsource Tracker</PageTitle>
+
+<div class="container">
+    <div class="row justify-content-center align-items-center min-vh-100">
+        <div class="col-12 col-md-8 col-lg-6 col-xl-5">
+            <!-- Card -->
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4 p-md-5">
+                    <div class="text-center mb-4">
+                        <h2 class="fw-bold text-primary">Outsource Tracker</h2>
+                        <p class="text-muted">Signup to track your outsourced work</p>
+                    </div>
+
+                    <EditForm Model="registerModel" OnValidSubmit="HandleRegister" class="needs-validation">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="text-danger mb-3" />
+
+                        <!-- First Name -->
+                        <div class="mb-3">
+                            <label for="firstName" class="form-label fw-semibold">First Name</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
+                                <InputText id="firstName" class="form-control" @bind-Value="registerModel.FirstName" placeholder="Greg" autocomplete="given-name" />
+                            </div>
+                            <ValidationMessage For="() => registerModel.FirstName" class="text-danger small" />
+                        </div>
+
+                        <!-- Last Name -->
+                        <div class="mb-3">
+                            <label for="lastName" class="form-label fw-semibold">Last Name</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
+                                <InputText id="lastName" class="form-control" @bind-Value="registerModel.LastName" placeholder="Hammer" autocomplete="family-name" />
+                            </div>
+                            <ValidationMessage For="() => registerModel.LastName" class="text-danger small" />
+                        </div>
+
+                        <!-- ALPHA Code -->
+                        <div class="mb-3">
+                            <label for="alphaCode" class="form-label fw-semibold">Alpha Code</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-truck"></i></span>
+                                <InputText id="alphaCode" class="form-control" @bind-Value="registerModel.AlphaCode" placeholder="HAMG1" autocomplete="off" />
+                            </div>
+                            <ValidationMessage For="() => registerModel.AlphaCode" class="text-danger small" />
+                        </div>
+
+                        <!-- Workday Id -->
+                        <div class="mb-3">
+                            <label for="workdayId" class="form-label fw-semibold">Workday ID</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-suitcase-lg"></i></span>
+                                <InputText id="workdayId" class="form-control" @bind-Value="registerModel.WorkdayId" placeholder="123456" autocomplete="off" />
+                            </div>
+                            <ValidationMessage For="() => registerModel.WorkdayId" class="text-danger small" />
+                        </div>
+
+                        <!-- Email -->
+                        <div class="mb-3">
+                            <label for="email" class="form-label fw-semibold">Email Address</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                                <InputText id="email" class="form-control" @bind-Value="registerModel.Email" placeholder="name@company.com" autocomplete="email" />
+                            </div>
+                            <ValidationMessage For="() => registerModel.Email" class="text-danger small" />
+                        </div>
+
+                        <!-- Password -->
+                        <div class="mb-3">
+                            <label for="password" class="form-label fw-semibold">Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                                <InputText id="password" name="new-password" type="@passwordInputType" class="form-control" @bind-Value="registerModel.Password" placeholder="••••••••" autocomplete="new-password" />
+                                <button type="button" class="btn btn-outline-secondary" @onclick="TogglePasswordVisibility">
+                                    <i class="@(showPassword ? "bi bi-eye-slash" : "bi bi-eye")"></i>
+                                </button>
+                            </div>
+                            <ValidationMessage For="() => registerModel.Password" class="text-danger small" />
+                        </div>
+
+                        <!-- Login Button -->
+                        <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold" disabled="@isLoading">
+                            @(isLoading ? "Registering..." : "Create Account")
+                        </button>
+                    </EditForm>
+
+                    <!-- Login link -->
+                    <div class="text-center mt-4">
+                        <span class="text-muted">Already have an account? </span>
+                        <a href="/login" class="text-primary fw-semibold text-decoration-none">Sign in</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-3">
+                <small class="text-muted">&copy; @DateTime.Now.Year Outsource Tracker</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegisterModel registerModel = new();
+    private bool isLoading = false;
+    private bool showPassword = false;
+    private string passwordInputType => showPassword ? "text" : "password";
+
+    private void TogglePasswordVisibility()
+    {
+        showPassword = !showPassword;
+    }
+
+    private async Task HandleRegister()
+    {
+        isLoading = true;
+        // TODO: Call your Backend API (e.g., /api/auth/login)
+        // Example using HttpClient (inject IHttpClientFactory or your AuthService)
+        /*
+        try
+        {
+            var response = await http.PostAsJsonAsync("api/auth/login", loginModel);
+            if (response.IsSuccessStatusCode)
+            {
+                var token = await response.Content.ReadFromJsonAsync<AuthResponse>();
+                // Store token (localStorage / protected local storage)
+                // Navigate to /dashboard or home
+                Navigation.NavigateTo("/dashboard");
+                }
+            else
+            {
+                // Show error via toast or ValidationSummary
+                }
+            }
+        catch (Exception ex)
+        {
+            // Handle network error
+            }
+        */
+        isLoading = false;
+    }
+}
