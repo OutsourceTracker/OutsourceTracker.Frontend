@@ -1,83 +1,107 @@
 ﻿using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
 using System.Security.Claims;
 
 namespace OutsourceTracker.Services;
 
 public class UserService
 {
-    private AuthenticationStateProvider Provider { get; set; } = default!;
-    private IAccessTokenProvider TokenService { get; set; }= default!;
-    private ClaimsPrincipal? Claims { get; set; }
-    private AccessToken? TokenResult { get; set; }
+    private readonly AuthenticationStateProvider _authStateProvider;
+
+    private ClaimsPrincipal? _claims;
+    private bool _isAuthenticated;
+
+    public bool IsAuthenticated => _isAuthenticated;
     public bool AuthPending { get; set; }
-    public bool IsAuthenticated { get; set; }
 
-    public UserService(AuthenticationStateProvider state, IAccessTokenProvider tokens)
+    public UserService(AuthenticationStateProvider state)
     {
-        Provider = state;
-        TokenService = tokens;
+        _authStateProvider = state;
     }
 
-    public async Task<ClaimsPrincipal> GetClaim()
+    /// <summary>
+    /// Returns the current user's ClaimsPrincipal (cached for performance)
+    /// </summary>
+    public async Task<ClaimsPrincipal> GetClaimsPrincipalAsync()
     {
-        try
-        {
-            if (Claims == null)
-            {
-                var request = await Provider.GetAuthenticationStateAsync();
-
-                if (request == null)
-                {
-                    return new ClaimsPrincipal(new ClaimsIdentity());
-                }
-
-                Claims = request.User;
-            }
-        }
-        catch (Exception ex)
-        {
-            return new ClaimsPrincipal(new ClaimsIdentity());
-        }
-        
-
-        return Claims;
-    }
-
-    public async Task<AccessToken?> GetToken()
-    {
-        if (TokenResult != null)
-        {
-            return TokenResult;
-        }
+        if (_claims != null)
+            return _claims;
 
         try
         {
-            var tokenResult = await TokenService.RequestAccessToken(
-                new AccessTokenRequestOptions
-                {
-                    Scopes = new[] { "User.Read" }
-                });
-
-
-            if (tokenResult.TryGetToken(out var token))
-            {
-                TokenResult = token;
-                return token;
-            }
+            var authState = await _authStateProvider.GetAuthenticationStateAsync();
+            _claims = authState.User ?? new ClaimsPrincipal(new ClaimsIdentity());
+            _isAuthenticated = _claims.Identity?.IsAuthenticated ?? false;
         }
-        catch { }
+        catch
+        {
+            _claims = new ClaimsPrincipal(new ClaimsIdentity());
+            _isAuthenticated = false;
+        }
 
-        return null;
+        return _claims;
     }
 
-    public Task WaitForAuthentication(TimeSpan? timeout = null) => Task.Run(async () =>
+    /// <summary>
+    /// Gets the current user's email (for Gravatar, profile, etc.)
+    /// </summary>
+    public async Task<string?> GetCurrentUserEmailAsync()
     {
-        DateTime now = DateTime.Now;
-        TimeSpan span = timeout ?? TimeSpan.FromSeconds(5);
-        while (AuthPending && (DateTime.Now - now) <= span)
+        var user = await GetClaimsPrincipalAsync();
+        return user.FindFirst(ClaimTypes.Email)?.Value
+            ?? user.FindFirst("email")?.Value;   // fallback for custom claim name
+    }
+
+    /// <summary>
+    /// Gets the current user's ID (sub claim from JWT)
+    /// </summary>
+    public async Task<string?> GetCurrentUserIdAsync()
+    {
+        var user = await GetClaimsPrincipalAsync();
+        return user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? user.FindFirst("sub")?.Value;
+    }
+
+    /// <summary>
+    /// Gets the current user's display name
+    /// </summary>
+    public async Task<string?> GetCurrentUserNameAsync()
+    {
+        var user = await GetClaimsPrincipalAsync();
+        return user.FindFirst(ClaimTypes.Name)?.Value
+            ?? user.Identity?.Name;
+    }
+
+    /// <summary>
+    /// Checks if the current user is in a specific role
+    /// </summary>
+    public async Task<bool> IsInRoleAsync(string role)
+    {
+        var user = await GetClaimsPrincipalAsync();
+        return user.IsInRole(role);
+    }
+
+    /// <summary>
+    /// Clears cached claims (call this after login/logout)
+    /// </summary>
+    public void ClearCache()
+    {
+        _claims = null;
+        _isAuthenticated = false;
+    }
+
+    /// <summary>
+    /// Optional: Wait for authentication to complete (useful during app startup)
+    /// </summary>
+    public async Task WaitForAuthenticationAsync(TimeSpan? timeout = null)
+    {
+        if (!AuthPending) return;
+
+        var start = DateTime.UtcNow;
+        var maxWait = timeout ?? TimeSpan.FromSeconds(5);
+
+        while (AuthPending && (DateTime.UtcNow - start) <= maxWait)
         {
             await Task.Delay(100);
         }
-    });
+    }
 }
