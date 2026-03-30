@@ -9,4 +9,16 @@ public class ZoneViewModel : IZone<Guid>
     public string Name { get; set; }
 
     public Polygon Boundry { get; set; }
+
+    public string ShortCode { get; set; }
+
+    public string FullName { get; set; }
+
+    public ICollection<Vector2> EntryPoints { get; set; }
+
+    public ICollection<Vector2> ExitPoints { get; set; }
+
+    public ICollection<Vector2> DockPoints { get; set; }
+
+    public DateTimeOffset CreatedOn { get; set; }
 }
