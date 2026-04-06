@@ -30,51 +30,26 @@
                     <AuthorizeView>
                         <Authorized>
                             <!-- Trailers -->
-                            @if (context.User.HasRolePrefix("Trailers."))
-                            {
-                                <li class="nav-item dropdown">
-                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Trailers</a>
-                                    <ul class="dropdown-menu">
-                                        @if (context.User.IsInRole(ApplicationRole.TrailerViewer))
-                                        {
-                                            <li><NavLink class="dropdown-item" href="/trailers/">Manage Trailers</NavLink></li>
-                                        }
-                                        @if (context.User.IsInRole(ApplicationRole.TrailerAdmin))
-                                        {
-                                            <li><NavLink class="dropdown-item" href="/trailer/create">Create Trailer</NavLink></li>
-                                        }
-                                        @if (context.User.IsInRole(ApplicationRole.TrailerSpotter))
-                                        {
-                                            <li><NavLink class="dropdown-item" href="/trailer/spot">Spot Trailer</NavLink></li>
-                                        }
-                                    </ul>
-                                </li>
-                            }
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Trailers</a>
+                                <ul class="dropdown-menu">
+                                    <li><NavLink class="dropdown-item" href="/trailers/">Manage Trailers</NavLink></li>
+                                    <li><NavLink class="dropdown-item" href="/trailer/create">Create Trailer</NavLink></li>
+                                    <li><NavLink class="dropdown-item" href="/trailer/spot">Spot Trailer</NavLink></li>
+                                </ul>
+                            </li>
 
                             <!-- Zones -->
-                            @if (context.User.HasRolePrefix("Zones."))
-                            {
-                                <li class="nav-item dropdown">
-                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Zones</a>
-                                    <ul class="dropdown-menu">
-                                        @if (context.User.IsInRole(ApplicationRole.ZoneAdmin))
-                                        {
-                                            <li><NavLink class="dropdown-item" href="/zone/create">Create Zone</NavLink></li>
-                                        }
-                                    </ul>
-                                </li>
-                            }
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Zones</a>
+                                <ul class="dropdown-menu">
+                                    <li><NavLink class="dropdown-item" href="/zone/create">Create Zone</NavLink></li>
+                                </ul>
+                            </li>
 
                             <!-- Add your other dropdowns (Tractors, Drivers, Routes) here the same way -->
                         </Authorized>
                     </AuthorizeView>
-
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Tools</a>
-                        <ul class="dropdown-menu">
-                            <li><NavLink class="dropdown-item" href="/tools/tandem-calculator">Tandem Calculator</NavLink></li>
-                        </ul>
-                    </li>
                 </ul>
 
                 <!-- Right-aligned auth section -->
