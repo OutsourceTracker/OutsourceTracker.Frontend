@@ -138,16 +138,19 @@
                 return;
             }
 
-            HttpResponseMessage response = await TrailerService.Create();
-            response.EnsureSuccessStatusCode();
-            Guid? instanceId = await response.Content.ReadFromJsonAsync<Guid>();
-
-            if (instanceId.HasValue)
+            HttpResponseMessage response = await TrailerService.Create(new TrailerViewModel()
             {
-                await TrailerService.Update(instanceId.Value, request);
+                Prefix = request.Prefix,
+                Name = request.Name
+            });
+            response.EnsureSuccessStatusCode();
+            TrailerViewModel? trailer = await response.Content.ReadFromJsonAsync<TrailerViewModel>();
+
+            if (trailer != null)
+            {
                 message = "Trailer created successfully!";
                 messageType = "success";
-                Navigation.NavigateTo($"/trailer/{instanceId}");
+                Navigation.NavigateTo($"/trailer/{trailer.Id}");
             }
             else
             {
