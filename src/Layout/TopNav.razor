@@ -26,6 +26,13 @@
                     <li class="nav-item">
                         <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Home</NavLink>
                     </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Account Management</a>
+                        <ul class="dropdown-menu">
+                            <li><NavLink href="/accounts" class="dropdown-item">Accounts</NavLink></li>
+                            <li><NavLink href="/organizationalunits" class="dropdown-item">Organizational Units</NavLink></li>
+                        </ul>
+                    </li>
 
                     <AuthorizeView>
                         <Authorized>
