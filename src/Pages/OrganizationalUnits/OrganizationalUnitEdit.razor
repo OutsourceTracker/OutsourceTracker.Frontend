@@ -1,0 +1,89 @@
+﻿@page "/organizationalunits/create"
+@page "/organizationalunits/edit/{Id:guid?}"
+@using OutsourceTracker.BusinessUnit.Accounts
+@using OutsourceTracker.BusinessUnit.Divisions
+@using OutsourceTracker.Pages.Shared.Components
+@using OutsourceTracker.Services
+@using OutsourceTracker.Services.DataModels
+
+<PageTitle>@(Id.HasValue ? "Edit" : "Create") OU</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-xl-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light py-3">
+                    <h4 class="mb-0">@(Id.HasValue ? "Edit Organizational Unit" : "New Organizational Unit")</h4>
+                </div>
+                <div class="card-body">
+                    <EditForm Model="model" OnValidSubmit="SaveAsync">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Short Code <span class="text-danger">*</span></label>
+                            <InputText class="form-control" @bind-Value="model.ShortCode" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                            <InputText class="form-control" @bind-Value="model.Name" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
+                            <InputTextArea class="form-control" @bind-Value="model.Description" />
+                        </div>
+
+                        <div class="d-flex gap-3 mt-4">
+                            <button type="submit" class="btn btn-success px-5">Save</button>
+                            <button type="button" class="btn btn-secondary px-5" @onclick="Cancel">Cancel</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Inject] private OrganizationalUnitService Service { get; init; } = default!;
+    [Inject] private NavigationManager Navigation { get; init; } = default!;
+    [Parameter] public Guid? Id { get; set; }
+
+    private OrganizationalUnit model = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id.HasValue)
+        {
+            var result = await Service.Get(Id.Value);
+            if (result.Success && result.Data is OrganizationalUnit ou)
+            {
+                model = ou;
+            }
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        ModelResult result;
+        if (Id.HasValue)
+            result = await Service.Update(Id.Value, new
+            {
+                model.ShortCode,
+                model.Name,
+                model.Description
+            });
+        else
+            result = await Service.Create(new
+            {
+                model.ShortCode,
+                model.Name,
+                model.Description
+            });
+
+        Navigation.NavigateTo("/organizationalunits");
+    }
+
+    private void Cancel() => Navigation.NavigateTo("/organizationalunits");
+}

@@ -1,0 +1,84 @@
+﻿@page "/organizationalunits"
+@using OutsourceTracker.BusinessUnit.Accounts
+@using OutsourceTracker.BusinessUnit.Divisions
+@using OutsourceTracker.Models
+@using OutsourceTracker.Pages.Shared.Components
+@using OutsourceTracker.Services
+
+<PageTitle>OU Management</PageTitle>
+
+<div class="container-fluid py-4">
+    <ResponsiveDivTable TItem="OrganizationalUnit" Title="OUs"
+                        Items="ous"
+                        @ref="tableRef">
+
+        <CreateButtonTemplate>
+            <button class="btn btn-primary btn-lg shadow-sm" @onclick='() => Navigation.NavigateTo("/organizationalunits/create")'>
+                <i class="bi bi-plus-circle me-2"></i>New OU
+            </button>
+        </CreateButtonTemplate>
+
+        <HeaderTemplate>
+            <div class="flex-fill" @onclick='() => tableRef?.SetColumnFilter("ShortCode")'>Short Code</div>
+            <div class="flex-fill" @onclick='() => tableRef?.SetColumnFilter("Name")'>Name</div> 
+            <div class="flex-fill" @onclick='() => tableRef?.SetColumnFilter("Description")'>Description</div> 
+            <div class="flex-fill text-end">Actions</div>
+        </HeaderTemplate>
+
+        <RowTemplate Context="acc">
+            <div class="flex-fill fw-medium">@acc.ShortCode</div>
+            <div class="flex-fill">@acc.Name</div>
+            <div class="flex-fill text-muted">@acc.Description</div>
+            <div class="flex-fill text-end">
+                <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => Edit(acc.Id)">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(acc.Id)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </RowTemplate>
+    </ResponsiveDivTable>
+</div>
+
+@code {
+    [Inject] NavigationManager Navigation { get; init; } = default!;
+    [Inject] IJSRuntime JS { get; init; } = default!;
+    [Inject] OrganizationalUnitService Service { get; init; } = default!;
+    private List<OrganizationalUnit>? ous = new();
+    private ResponsiveDivTable<OrganizationalUnit> tableRef = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Service.Search((object?)null);
+
+        if (result.Success)
+        {
+            ous = result.Data as List<OrganizationalUnit>;
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", "Failed to load organizational units.");
+        }
+    }
+
+    private void Edit(Guid id) => Navigation.NavigateTo($"/organizationalunits/edit/{id}");
+
+    private async Task Delete(Guid id)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Delete this organizational unit?"))
+            return;
+
+        var result = await Service.Delete(id);
+
+        if (result.Success)
+        {
+            ous = ous?.Where(ou => ou.Id != id).ToList();
+            await JS.InvokeVoidAsync("alert", "Organizational unit deleted.");
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", "Failed to delete organizational unit.");
+        }
+    }
+}
