@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.JSInterop;
 using OutsourceTracker.Authentication;
+using OutsourceTracker.Services.DataModels;
 using System.Net;
 using System.Net.Http.Json;
 
@@ -25,26 +26,35 @@ public class LoginService
         _tokenService = asp as TokenService ?? throw new ArgumentException("AuthenticationStateProvider must be of type TokenService");
     }
 
-    public async Task<bool> LoginAsync(LoginModel model, CancellationToken cancellationToken)
+    public async Task<ModelResult> LoginAsync(LoginModel model, CancellationToken cancellationToken)
     {
+        IModelResultBuilder r = ModelResult.Builder();
         try
         {
             var response = await _http.PostAsJsonAsync("authentication/login", model, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
-                return false;
+            {
+                string? reason = await response.Content.ReadFromJsonAsync<string>(cancellationToken);
+                return r.WithResult(reason!)
+                    .Build();
+            }
 
             var tokenData = await response.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken: cancellationToken);
 
             if (tokenData?.Token == null)
-                return false;
+                return r.AddError("TokenError", "Failed to retrieve authentication token")
+                    .Build();
 
             await _tokenService.SetTokenAsync(tokenData);
-            return true;
+            return r.WithSuccess()
+                .WithResult(tokenData)
+                .Build();
         }
         catch
         {
-            return false;
+            return r.AddError("LoginError", "An error occurred during login")
+                .Build();
         }
     }
 
@@ -54,16 +64,26 @@ public class LoginService
         _nav.NavigateTo("/login", forceLoad: true);
     }
 
-    public async Task<HttpStatusCode> RegisterAsync(RegisterModel model, CancellationToken cancellationToken)
+    public async Task<ModelResult> RegisterAsync(RegisterModel model, CancellationToken cancellationToken)
     {
+        IModelResultBuilder r = ModelResult.Builder();
         try
         {
             var response = await _http.PostAsJsonAsync("authentication/register", model, cancellationToken);
-            return response.StatusCode;
+            if (!response.IsSuccessStatusCode)
+            {
+                string? reason = await response.Content.ReadFromJsonAsync<string>(cancellationToken);
+                return r.WithResult(reason!)
+                    .Build();
+            }
+
+            return r.WithSuccess()
+                .Build();
         }
-        catch
+        catch (Exception ex)
         {
-            return HttpStatusCode.InternalServerError;
+            return r.AddError("RegistrationError", "An error occurred during registration: " + ex.Message)
+                .Build();
         }
     }
 }
