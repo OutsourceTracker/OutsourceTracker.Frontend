@@ -1,6 +1,9 @@
 ﻿@page "/register"
 @using System.ComponentModel.DataAnnotations
 @using OutsourceTracker.Authentication
+@using OutsourceTracker.Services.Authentication
+@using System.Net
+@using OutsourceTracker.Services.DataModels
 @layout EmptyLayout
 
 <PageTitle>Register - Outsource Tracker</PageTitle>
@@ -15,6 +18,14 @@
                         <h2 class="fw-bold text-primary">Outsource Tracker</h2>
                         <p class="text-muted">Signup to track your outsourced work</p>
                     </div>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            @errorMessage
+                            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+                        </div>
+                    }
 
                     <EditForm Model="registerModel" OnValidSubmit="HandleRegister" class="needs-validation">
                         <DataAnnotationsValidator />
@@ -83,7 +94,7 @@
                             <ValidationMessage For="() => registerModel.Password" class="text-danger small" />
                         </div>
 
-                        <!-- Login Button -->
+                        <!-- Register Button -->
                         <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold" disabled="@isLoading">
                             @(isLoading ? "Registering..." : "Create Account")
                         </button>
@@ -109,6 +120,10 @@
     private bool isLoading = false;
     private bool showPassword = false;
     private string passwordInputType => showPassword ? "text" : "password";
+    private string? errorMessage;
+
+    [Inject] private LoginService loginService { get; init; } = default!;
+    [Inject] private NavigationManager navigationManager { get; init; } = default!;
 
     private void TogglePasswordVisibility()
     {
@@ -117,30 +132,29 @@
 
     private async Task HandleRegister()
     {
+        errorMessage = null;   // Clear previous errors
         isLoading = true;
-        // TODO: Call your Backend API (e.g., /api/auth/login)
-        // Example using HttpClient (inject IHttpClientFactory or your AuthService)
-        /*
+
         try
         {
-            var response = await http.PostAsJsonAsync("api/auth/login", loginModel);
-            if (response.IsSuccessStatusCode)
+            ModelResult result = await loginService.RegisterAsync(registerModel, CancellationToken.None);
+
+            if (result.Success)
             {
-                var token = await response.Content.ReadFromJsonAsync<AuthResponse>();
-                // Store token (localStorage / protected local storage)
-                // Navigate to /dashboard or home
-                Navigation.NavigateTo("/dashboard");
-                }
+                navigationManager.NavigateTo("/login?message=Registration successful. Please sign in.");
+            }
             else
             {
-                // Show error via toast or ValidationSummary
-                }
+                errorMessage = result.Data?.ToString() ?? "Registration failed. Please check your information and try again.";
             }
+        }
         catch (Exception ex)
         {
-            // Handle network error
-            }
-        */
-        isLoading = false;
+            errorMessage = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 }
