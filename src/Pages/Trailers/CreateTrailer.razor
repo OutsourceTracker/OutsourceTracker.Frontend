@@ -2,6 +2,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using OutsourceTracker.Models.Trailers
 @using OutsourceTracker.Services
+@using OutsourceTracker.Services.DataModels
 @using OutsourceTracker.Services.ModelService
 @attribute [Authorize]
 
@@ -138,13 +139,15 @@
                 return;
             }
 
-            HttpResponseMessage response = await TrailerService.Create(new TrailerViewModel()
+            ModelResult response = await TrailerService.Create(new
             {
                 Prefix = request.Prefix,
                 Name = request.Name
             });
-            response.EnsureSuccessStatusCode();
-            TrailerViewModel? trailer = await response.Content.ReadFromJsonAsync<TrailerViewModel>();
+            
+            Guid newId = response.ToResult<Guid>();
+
+            TrailerViewModel? trailer = (await TrailerService.Get(newId)).ToResult<TrailerViewModel>();
 
             if (trailer != null)
             {

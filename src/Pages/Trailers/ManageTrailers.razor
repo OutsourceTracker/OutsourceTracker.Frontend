@@ -5,6 +5,7 @@
 @using OutsourceTracker.Models.Trailers
 @using OutsourceTracker.Services
 @using OutsourceTracker.Pages.Trailers.Components
+@using OutsourceTracker.Services.DataModels
 @attribute [Authorize]
 
 <PageTitle>Trailers • Outsource Tracker</PageTitle>
@@ -161,10 +162,11 @@
     {
         selectedTrailer = null;
         selectedTrailers.Clear();
-        trailers = await TrailerService.Search()
+        trailers = (await TrailerService.Search((object)null))
+            .ToResult<List<TrailerViewModel>>()!
             .OrderByDescending(t => t.LocatedDate.HasValue)
             .ThenByDescending(t => t.LocatedDate)
-            .ToListAsync();
+            .ToList();
 
         if (TrailerId.HasValue)
         {
@@ -216,7 +218,7 @@
 
         var result = await TrailerService.Delete(selectedTrailer.Id);
 
-        if (result.IsSuccessStatusCode)
+        if (result.Success)
         {
             trailers?.Remove(selectedTrailer);
             selectedTrailers.Remove(selectedTrailer);

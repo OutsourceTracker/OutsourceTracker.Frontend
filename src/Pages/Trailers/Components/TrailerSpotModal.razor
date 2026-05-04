@@ -266,6 +266,14 @@
                 }
 
                 var foundTrailers = new List<TrailerViewModel>();
+                var trailersResult = await TrailerService.Search((object?)null);
+
+                if (!trailersResult.Success || trailersResult.Data is not List<TrailerViewModel> allTrailers)
+                {
+                    message = "Failed to retrieve trailers.";
+                    messageType = "danger";
+                    return;
+                }
 
                 foreach (var id in identifiers)
                 {
@@ -276,11 +284,7 @@
                         continue;
                     }
 
-                    var match = await TrailerService.Search(new
-                    {
-                        PrefixEquals = prefix,
-                        NameEquals = name
-                    }).FirstOrDefaultAsync(t => t.Prefix == prefix && t.Name == name);
+                    var match = allTrailers.FirstOrDefault(t => t.Prefix == prefix && t.Name == name);
 
                     if (match != null)
                         foundTrailers.Add(match);
@@ -302,8 +306,14 @@
                         location,
                         accuracy: model.Accuracy);
 
-                    resp.EnsureSuccessStatusCode();
-                    results.Add(new SpotResult($"{trailer.Prefix} {trailer.Name}", true, null));
+                    if (resp.Success)
+                    {
+                        results.Add(new SpotResult($"{trailer.Prefix} {trailer.Name}", true, null));
+                    }
+                    else
+                    {
+                        results.Add(new SpotResult($"{trailer.Prefix} {trailer.Name}", false, "Unknown error"));
+                    }
                 }
                 catch (Exception ex)
                 {

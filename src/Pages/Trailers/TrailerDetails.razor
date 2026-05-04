@@ -4,6 +4,7 @@
 @using OutsourceTracker.Components.GoogleMaps
 @using OutsourceTracker.Models.Trailers
 @using OutsourceTracker.Services
+@using OutsourceTracker.Services.DataModels
 @inject TrailerService TrailerService
 @inject NavigationManager Navigation
 
@@ -193,7 +194,7 @@
     {
         try
         {
-            trailer = await TrailerService.Get(Id);
+            trailer = (await TrailerService.Get(Id)).ToResult<TrailerViewModel>();
         }
         catch (Exception ex)
         {
@@ -215,7 +216,7 @@
         try
         {
             var success = await TrailerService.Delete(Id);
-            if (success.IsSuccessStatusCode)
+            if (success.Success)
             {
                 Navigation.NavigateTo("/trailers", forceLoad: true);
             }

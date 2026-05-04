@@ -6,6 +6,7 @@
 @using OutsourceTracker.Geolocation
 @using OutsourceTracker.Models.Trailers
 @using OutsourceTracker.Services
+@using OutsourceTracker.Services.DataModels
 @using OutsourceTracker.Services.ModelService
 
 <PageTitle>Spot Trailer Location</PageTitle>
@@ -175,11 +176,13 @@
 
         try
         {
-            TrailerViewModel? lookup = await TrailerService.Search(new
+            TrailerViewModel? lookup = (await TrailerService.Search(new
             {
                 PrefixEquals = request.Prefix,
                 NameEquals = request.Name
-            }).FirstOrDefaultAsync(t => t.Prefix == request.Prefix && t.Name == request.Name);
+            }))
+            .ToResult<List<TrailerViewModel>>()!
+            .FirstOrDefault(t => t.Prefix == request.Prefix && t.Name == request.Name);
 
             if (lookup == null)
             {
@@ -190,8 +193,15 @@
             }
 
             var response = await TrailerService.UpdateLocation(lookup.Id, new Vector2(request.Latitude, request.Longitude), accuracy: request.Accuracy);
-            response.EnsureSuccessStatusCode();
-            Navigation.NavigateTo($"/trailers/{lookup.Id}");
+            if (response.Success)
+            {
+                Navigation.NavigateTo($"/trailers/{lookup.Id}");
+            }
+            else
+            {
+                message = $"Failed to update location";
+                messageType = "danger";
+            }
         }
         catch (Exception ex)
         {
