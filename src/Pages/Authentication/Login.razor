@@ -4,6 +4,7 @@
 @using OutsourceTracker.Services
 @using System.ComponentModel.DataAnnotations
 @using OutsourceTracker.Services.Authentication
+@using OutsourceTracker.Services.DataModels
 @layout EmptyLayout
 
 <PageTitle>Login - Outsource Tracker</PageTitle>
@@ -11,13 +12,30 @@
 <div class="container">
     <div class="row justify-content-center align-items-center min-vh-100">
         <div class="col-12 col-md-8 col-lg-6 col-xl-5">
-            <!-- Card -->
             <div class="card shadow-sm border-0">
                 <div class="card-body p-4 p-md-5">
                     <div class="text-center mb-4">
                         <h2 class="fw-bold text-primary">Outsource Tracker</h2>
                         <p class="text-muted">Sign in to track your outsourced work</p>
                     </div>
+
+                    <!-- Success Message (from registration) -->
+                    @if (!string.IsNullOrEmpty(Message))
+                    {
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            @Message
+                            <button type="button" class="btn-close" @onclick="() => Message = null"></button>
+                        </div>
+                    }
+
+                    <!-- Error Message -->
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            @errorMessage
+                            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+                        </div>
+                    }
 
                     <EditForm Model="loginModel" OnValidSubmit="HandleLogin" class="needs-validation">
                         <DataAnnotationsValidator />
@@ -67,17 +85,9 @@
                         <a href="/register" class="text-primary fw-semibold text-decoration-none">Register now</a>
                     </div>
 
-                    <!-- Future: External auth buttons (Microsoft 365 / Google) -->
+                    <!-- Future external auth -->
                     <div class="mt-4 pt-3 border-top text-center">
-                        @* <p class="small text-muted mb-2">Or sign in with</p>
-                        <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
-                            <button type="button" class="btn btn-outline-secondary flex-fill" @onclick="LoginWithMicrosoft">
-                                <i class="bi bi-microsoft me-2"></i> Microsoft 365
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary flex-fill" @onclick="LoginWithGoogle">
-                                <i class="bi bi-google me-2"></i> Google
-                            </button> 
-                        </div> *@
+                        @* Or sign in with Microsoft 365 / Google *@
                     </div>
                 </div>
             </div>
@@ -90,8 +100,18 @@
     private bool isLoading = false;
     private bool showPassword = false;
     private string passwordInputType => showPassword ? "text" : "password";
-    [Inject] private LoginService loginService { get; init; }
-    [Inject] private NavigationManager navigationManager { get; init; }
+    private string? errorMessage;
+
+    [SupplyParameterFromQuery] public string? Message { get; set; }   // Changed to set; for clearing if needed
+
+    [Inject] private LoginService loginService { get; init; } = default!;
+    [Inject] private NavigationManager navigationManager { get; init; } = default!;
+
+    protected override void OnInitialized()
+    {
+        // Optional: Auto-clear success message after a few seconds (if desired)
+        // if (!string.IsNullOrEmpty(Message)) { ... }
+    }
 
     private void TogglePasswordVisibility()
     {
@@ -100,14 +120,29 @@
 
     private async Task HandleLogin()
     {
+        errorMessage = null;
         isLoading = true;
-        bool success = await loginService.LoginAsync(loginModel, CancellationToken.None);
 
-        if (success)
+        try
         {
-            navigationManager.NavigateTo("/");
-        }
+            ModelResult result = await loginService.LoginAsync(loginModel, CancellationToken.None);
 
-        isLoading = false;
+            if (result.Success)
+            {
+                navigationManager.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = result.Data?.ToString() ?? "Invalid email or password. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 }
