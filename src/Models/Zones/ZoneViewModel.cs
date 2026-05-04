@@ -21,4 +21,6 @@ public class ZoneViewModel : IZone<Guid>
     public ICollection<Vector2> DockPoints { get; set; }
 
     public DateTimeOffset CreatedOn { get; set; }
+
+    public bool Equals(Guid other) => Id.Equals(other);
 }
