@@ -39,12 +39,9 @@ namespace OutsourceTracker
             builder.Services.AddScoped<UserPhotoService>();
             builder.Services.AddScoped<UserService>();
             builder.Services.AddScoped<AppVersionService>();
-            builder.Services.AddScoped<TrailerService>()
-                .AddScoped<IModelCreateService<TrailerViewModel, HttpResponseMessage>>(sp => sp.GetRequiredService<TrailerService>())
-                .AddScoped<IModelDeleteService<TrailerViewModel, HttpResponseMessage>>(sp => sp.GetRequiredService<TrailerService>())
-                .AddScoped<IModelLookupService<TrailerViewModel>>(sp => sp.GetRequiredService<TrailerService>())
-                .AddScoped<IModelUpdateService<TrailerViewModel, HttpResponseMessage>>(sp => sp.GetRequiredService<TrailerService>())
-                .AddScoped<ITrackableLocationService<TrailerViewModel, HttpResponseMessage>>(sp => sp.GetRequiredService<TrailerService>());
+            builder.Services.AddScoped<OrganizationalUnitService>();
+            builder.Services.AddScoped<AccountService>();
+            builder.Services.AddScoped<TrailerService>();
 
             await builder.Build().RunAsync();
         }
