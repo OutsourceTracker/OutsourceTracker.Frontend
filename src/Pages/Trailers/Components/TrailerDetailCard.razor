@@ -36,10 +36,10 @@ else
                         @(Trailer.LocatedDate?.ToLocalTime().ToString("MMM d, yyyy h:mm tt") ?? "—")
                     </dd>
 
-                    @if (!string.IsNullOrWhiteSpace(Trailer.LocatedBy))
+                    @if (!string.IsNullOrWhiteSpace(Trailer.LocatedByName))
                     {
                         <dt class="col-5 col-sm-4">Seen by</dt>
-                        <dd class="col-7 col-sm-8">@Trailer.LocatedBy</dd>
+                        <dd class="col-7 col-sm-8">@Trailer.LocatedByName</dd>
                     }
                 }
             </dl>

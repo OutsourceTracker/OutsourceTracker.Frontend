@@ -121,7 +121,7 @@
                                     <div style='min-width:180px;'>
                                         <strong>{trailer.Prefix}{trailer.Name}</strong><br><br>
                                         <strong>Last spotted:</strong><br>
-                                        By: {trailer.LocatedBy ?? "—"}<br>
+                                        By: {trailer.LocatedByName ?? "—"}<br>
                                         On: {(trailer.LocatedDate.HasValue ? trailer.LocatedDate.Value.ToLocalTime().ToString("MM/dd/yyyy HH:mm") : "—")}<br>
                                         Accuracy: {Math.Round(trailer.LocationAccuracy ?? 0, 1)} m
                                     </div>"

@@ -103,7 +103,7 @@
                                                 </div>
                                                 <div class="col-sm-6">
                                                     <label class="text-muted small d-block mb-1">Spotted By</label>
-                                                    <div class="fs-5">@(trailer.LocatedBy ?? "Unknown")</div>
+                                                    <div class="fs-5">@(trailer.LocatedByName ?? "Unknown")</div>
                                                 </div>
                                                 <div class="col-sm-6">
                                                     <label class="text-muted small d-block mb-1">Active Zone</label>
@@ -246,7 +246,7 @@
                 <strong>{trailer.Prefix}{trailer.Name}</strong><br><br>
                 <strong>Last spotted:</strong><br>
 {trailer.LocatedDate?.ToLocalTime():MMM dd, yyyy HH:mm}<br>
-                By: {trailer.LocatedBy ?? "—"}<br>
+                By: {trailer.LocatedByName ?? "—"}<br>
                 Accuracy: {trailer.LocationAccuracy:F1} m
             </div>"
             };
