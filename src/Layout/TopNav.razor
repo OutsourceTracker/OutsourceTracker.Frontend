@@ -101,6 +101,7 @@
 
     [Inject] private UserPhotoService PhotoService { get; init; } = default!;
     [Inject] private LoginService login { get; init; } = default!;
+    [Inject] private NavigationManager navigationManager { get; init; } = default!;
     private IJSObjectReference? topNavModule;
 
     protected override async Task OnInitializedAsync()
@@ -122,6 +123,7 @@
             string name = Uri.EscapeDataString(DisplayName);
             AvatarUrl = await PhotoService.GetAvatarUrlAsync();
         }
+        navigationManager.LocationChanged += OnLocationChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -162,9 +164,28 @@
 
     public async ValueTask DisposeAsync()
     {
+        navigationManager.LocationChanged -= OnLocationChanged;
         if (topNavModule != null)
         {
             await topNavModule.DisposeAsync();
+        }
+    }
+
+    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        await CollapseNavbarAsync();
+    }
+
+    private async Task CollapseNavbarAsync()
+    {
+        if (topNavModule != null)
+        {
+            await topNavModule.InvokeVoidAsync("collapseNavbar");
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("bootstrap.Collapse.getOrCreateInstance", "#navbarNav").AsTask()
+                     .ContinueWith(t => JS.InvokeVoidAsync("document.querySelector('#navbarNav').classList.remove('show')"));
         }
     }
 }
