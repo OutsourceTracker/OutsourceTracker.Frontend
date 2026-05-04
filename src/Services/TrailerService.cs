@@ -41,7 +41,6 @@ public class TrailerService : BaseBackendService, IModelCreateService<TrailerVie
     public async IAsyncEnumerable<TrailerViewModel> Search(object? searchOptions = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         using HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Get, "trailers");
-
         using HttpResponseMessage response = await SendMessage(message, cancellationToken);
         response.EnsureSuccessStatusCode();
         var haystack = response.Content.ReadFromJsonAsAsyncEnumerable<TrailerViewModel>(cancellationToken);
