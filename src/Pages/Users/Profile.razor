@@ -1,0 +1,118 @@
+﻿@page "/profile"
+@using Microsoft.AspNetCore.Authorization
+@using OutsourceTracker.Authentication
+@using System.Security.Claims
+@using OutsourceTracker.Services
+@attribute [Authorize]
+@inject ITokenService TokenService
+@inject ISnackbar Snackbar
+@inject ClipboardService Clipboard
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-8">
+    <MudPaper Class="pa-6" Elevation="3">
+        <MudText Typo="Typo.h4" GutterBottom="true">User Profile</MudText>
+        <MudText Typo="Typo.subtitle1" Class="mb-6">JWT Token Details</MudText>
+
+        <!-- Raw Token -->
+        <MudExpansionPanels>
+            <MudExpansionPanel Text="Raw JWT Token">
+                <div class="d-flex gap-2 mb-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                               OnClick="CopyRawToken">Copy Token</MudButton>
+                </div>
+                <MudText Typo="Typo.body2" Style="word-break: break-all; font-family: monospace; background: #f5f5f5; padding: 12px; border-radius: 4px;">
+                    @rawToken
+                </MudText>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+
+        <MudDivider Class="my-6" />
+
+        <!-- Claims Table -->
+        <MudText Typo="Typo.h6" Class="mb-4">Parsed Claims</MudText>
+        
+        <MudTable Items="@claims" Hover="true" Dense="true" Striped="true">
+            <HeaderContent>
+                <MudTh>Claim Type</MudTh>
+                <MudTh>Value</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Key</MudTd>
+                <MudTd>@context.Value</MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        <!-- Roles Highlight -->
+        <MudCard Class="mt-6">
+            <MudCardHeader>
+                <MudText Typo="Typo.h6">Roles</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                @if (roles.Any())
+                {
+                    <MudChipSet T="string">
+                        @foreach (var role in roles)
+                        {
+                            <MudChip Color="Color.Secondary">@role</MudChip>
+                        }
+                    </MudChipSet>
+                }
+                else
+                {
+                    <MudText>No roles assigned.</MudText>
+                }
+            </MudCardContent>
+        </MudCard>
+
+        <div class="d-flex justify-end mt-6 gap-2">
+            <MudButton Variant="Variant.Outlined" OnClick="RefreshData">Refresh Claims</MudButton>
+        </div>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private string? rawToken;
+    private Dictionary<string, string> claims = new();
+    private List<string> roles = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfileData();
+    }
+
+    private async Task LoadProfileData()
+    {
+        rawToken = await TokenService.GetTokenAsync();
+        var cl = TokenService.GetClaims(rawToken);
+
+        foreach (var c in cl)
+        {
+            if (c.Type == ClaimTypes.Role)
+            {
+                roles.Add(c.Value);
+            }
+            else
+            {
+                claims.Add(c.Type, c.Value);
+            }
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        claims.Clear();
+        roles.Clear();
+        await LoadProfileData();
+        StateHasChanged();
+        Snackbar.Add("Profile data refreshed", Severity.Info);
+    }
+
+    private async Task CopyRawToken()
+    {
+        if (!string.IsNullOrEmpty(rawToken))
+        {
+            await Clipboard.WriteTextAsync(rawToken);
+            Snackbar.Add("JWT token copied to clipboard", Severity.Success);
+        }
+    }
+}

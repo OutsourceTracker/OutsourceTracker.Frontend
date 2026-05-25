@@ -1,11 +1,10 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
-using OutsourceTracker.Geolocation;
-using OutsourceTracker.Models.Trailers;
+using MudBlazor;
+using MudBlazor.Services;
+using OutsourceTracker.Authentication;
 using OutsourceTracker.Services;
-using OutsourceTracker.Services.Authentication;
-using OutsourceTracker.Services.ModelService;
 
 namespace OutsourceTracker
 {
@@ -17,31 +16,46 @@ namespace OutsourceTracker
             builder.RootComponents.Add<App>("#app");
             builder.RootComponents.Add<HeadOutlet>("head::after");
 
-            builder.Services
-                .AddScoped<AuthMessageHandler>()
-                .AddHttpClient("API", client =>
+            builder.Services.AddHttpClient("API", client =>
+            {
+                if (builder.HostEnvironment.IsDevelopment())
                 {
-#if DEBUG
                     client.BaseAddress = new Uri("https://localhost:7253/");
-#else
+                }
+                else
+                {
                     client.BaseAddress = new Uri("https://api.vandersluistrucking.com/");
-#endif
-                })
-                .AddHttpMessageHandler<AuthMessageHandler>();
+                }
+            });
 
+            builder.Services.AddHttpClient("API_Secured", client =>
+            {
+                if (builder.HostEnvironment.IsDevelopment())
+                {
+                    client.BaseAddress = new Uri("https://localhost:7253/");
+                }
+                else
+                {
+                    client.BaseAddress = new Uri("https://api.vandersluistrucking.com/");
+                }
+            })
+            .AddHttpMessageHandler<AuthHttpMessageHandler>();
 
-            builder.Services.AddHttpClient();
-            
-            builder.Services.AddScoped<AuthenticationStateProvider, TokenService>()
-                .AddScoped<LoginService>()
-                .AddAuthorizationCore();
-
-            builder.Services.AddScoped<UserPhotoService>();
             builder.Services.AddScoped<UserService>();
-            builder.Services.AddScoped<AppVersionService>();
-            builder.Services.AddScoped<OrganizationalUnitService>();
-            builder.Services.AddScoped<AccountService>();
-            builder.Services.AddScoped<TrailerService>();
+            builder.Services.AddScoped<ITokenService, JwtTokenService>();
+            builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
+            builder.Services.AddScoped<ClipboardService>();
+            builder.Services.AddMudServices(config =>
+            {
+                config.SnackbarConfiguration.PositionClass = Defaults.Classes.Position.BottomCenter;
+                config.SnackbarConfiguration.PreventDuplicates = true;
+                config.SnackbarConfiguration.ShowCloseIcon = true;
+                config.SnackbarConfiguration.MaxDisplayedSnackbars = 5;
+                config.SnackbarConfiguration.VisibleStateDuration = 4000;
+                config.SnackbarConfiguration.HideTransitionDuration = 300;
+                config.SnackbarConfiguration.ShowTransitionDuration = 300;
+            });
+            builder.Services.AddAuthorizationCore();
 
             await builder.Build().RunAsync();
         }

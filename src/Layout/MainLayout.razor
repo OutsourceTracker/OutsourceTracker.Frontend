@@ -1,59 +1,87 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
-@using OutsourceTracker.Services
-@using OutsourceTracker.Services.Authentication
+@using OutsourceTracker.Authentication
 @inherits LayoutComponentBase
+@inject UserService Users
 
-<TopNav />
+<MudThemeProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
 
-<main class="main flex-grow-1">
-    <div class="pt-5 pb-5">
-        @if (IsLoggedIn)
-        {
-            @Body
-        }
-    </div>
-</main>
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Color="Color.Inherit"
+                       OnClick="ToggleDrawer"
+                       Class="mr-3" />
 
-<footer class="mt-auto py-3 bg-light border-top small text-center text-muted">
-    <div class="container">
-        Outsource Tracker • © @(DateTime.UtcNow.Year) Vandersluis Trucking
-    </div>
-</footer>
+        <MudText Typo="Typo.h5" Class="ml-2">Outsource Tracker</MudText>
+
+        <MudSpacer />
+
+        <!-- User Menu -->
+        <MudMenu Color="Color.Inherit"
+                 AnchorOrigin="Origin.BottomRight"
+                 TransformOrigin="Origin.TopRight"
+                 Class="mr-3"
+                 LockScroll="true">
+
+            <ActivatorContent>
+                <MudAvatar Color="Color.Primary"
+                           Size="Size.Medium"
+                           Style="cursor: pointer; user-select: none;" @onclick="@context.ToggleAsync">
+                    AU
+                </MudAvatar>
+            </ActivatorContent>
+
+            <ChildContent>
+                <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="/profile">Profile</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="/user-settings">Settings</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Help" Href="/help">Help & Support</MudMenuItem>
+                
+                <MudDivider />
+                
+                <MudMenuItem Icon="@Icons.Material.Filled.Logout"
+                             OnClick="HandleLogout"
+                             Color="Color.Error">
+                    Logout
+                </MudMenuItem>
+            </ChildContent>
+        </MudMenu>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen"
+               Elevation="1"
+               Variant="DrawerVariant.Responsive"
+               ClipMode="DrawerClipMode.Docked"
+               Width="260px"
+               MiniWidth="72px">
+
+        <MudNavMenu>
+            <MudNavLink Href="/dashboard" Icon="@Icons.Material.Filled.Dashboard" Match="NavLinkMatch.All">
+                Dashboard
+            </MudNavLink>
+            <MudNavLink Href="/trailers" Icon="@Icons.Material.Filled.TireRepair" Match="NavLinkMatch.All">
+                Trailers
+            </MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent>
+        @Body
+    </MudMainContent>
+</MudLayout>
 
 @code {
-    [Inject] private ILogger<MainLayout> Logger { get; init; } = default!;
-    [Inject] private IJSRuntime JS { get; init; } = default!;
-    [Inject] private AuthenticationStateProvider AuthService { get; init; } = default!;
-    [Inject] private NavigationManager Navigation { get; init; } = default!;
-    public bool IsLoggedIn { get; private set; } = false;
+    private bool _drawerOpen = false;
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    private void ToggleDrawer()
     {
-        if (!IsLoggedIn)
-        {
-            try
-            {
-                var authState = await AuthService.GetAuthenticationStateAsync();
+        _drawerOpen = !_drawerOpen;
+    }
 
-                if (authState?.User?.Identity?.IsAuthenticated == true)
-                {
-                    IsLoggedIn = true;
-                    Logger.LogDebug("User is authenticated");
-                    StateHasChanged();
-                }
-                else
-                {
-                    Logger.LogError("User is not authenticated");
-                    Navigation.NavigateTo("/login", false);
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Error checking authentication state");
-                Navigation.NavigateTo("/login", true);
-            }
-        }
-
-        await base.OnAfterRenderAsync(firstRender);
+    private async Task HandleLogout()
+    {
+        await Users.LogoutAsync();
     }
 }

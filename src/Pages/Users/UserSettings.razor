@@ -1,0 +1,63 @@
+﻿@page "/user-settings"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using MudBlazor
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-8">
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h4">User Settings</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudForm @ref="_form" @bind-IsValid="_isValid">
+                <MudTextField T="string" Label="Full Name" Required="true" />
+                <MudTextField T="string" Label="Alpha Code" Required="true" />
+                <MudTextField T="string" Label="Workday ID" />
+
+                <MudDivider Class="my-6" />
+
+                <MudText Typo="Typo.h6" Class="mb-4">Preferences</MudText>
+
+                <MudSwitch T="bool" Label="Enable Notifications" Color="Color.Primary" />
+                <MudSwitch T="bool" Label="Dark Mode" Color="Color.Primary" />
+                <MudSwitch T="bool" Label="Auto-save Reports" Color="Color.Primary" />
+                <MudSwitch T="bool" Label="Email Daily Summaries" Color="Color.Primary" />
+            </MudForm>
+        </MudCardContent>
+        <MudCardActions>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSettings" Disabled="!_isValid">
+                Save Changes
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+</MudContainer>
+
+@code {
+    //private UserSettingsDto _model = new();
+    private MudForm? _form;
+    private bool _isValid;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+           // _model = await Http.GetFromJsonAsync<UserSettingsDto>("api/UserSettings") ?? new();
+        }
+        catch
+        {
+            Snackbar.Add("Failed to load settings", Severity.Error);
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        if (_form is null) return;
+
+        await _form.Validate();
+
+        if (!_isValid) return;
+    }
+}

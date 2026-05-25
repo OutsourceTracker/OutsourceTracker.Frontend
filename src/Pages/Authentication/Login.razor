@@ -1,148 +1,64 @@
-﻿@page "/login"
-@using Microsoft.AspNetCore.Components.Authorization
+﻿@page "/"
+@using System.ComponentModel.DataAnnotations
 @using OutsourceTracker.Authentication
 @using OutsourceTracker.Services
-@using System.ComponentModel.DataAnnotations
-@using OutsourceTracker.Services.Authentication
-@using OutsourceTracker.Services.DataModels
 @layout EmptyLayout
+@inject UserService Users
+@inject NavigationManager Navigation
 
-<PageTitle>Login - Outsource Tracker</PageTitle>
+<EditForm Model="@model" OnValidSubmit="LoginAsync">
+    <DataAnnotationsValidator />
 
-<div class="container">
-    <div class="row justify-content-center align-items-center min-vh-100">
-        <div class="col-12 col-md-8 col-lg-6 col-xl-5">
-            <div class="card shadow-sm border-0">
-                <div class="card-body p-4 p-md-5">
-                    <div class="text-center mb-4">
-                        <h2 class="fw-bold text-primary">Outsource Tracker</h2>
-                        <p class="text-muted">Sign in to track your outsourced work</p>
-                    </div>
+    <MudText Typo="Typo.h3" Align="Align.Center" Class="mb-8 fw-bold text-primary">Welcome Back</MudText>
+    
+    <MudTextField T="string" @bind-Value="model.Email" Label="Email Address" Variant="Variant.Outlined"
+                  Class="mb-6" Immediate="true" For="() => model.Email" autocomplete="email" />
 
-                    <!-- Success Message (from registration) -->
-                    @if (!string.IsNullOrEmpty(Message))
-                    {
-                        <div class="alert alert-success alert-dismissible fade show" role="alert">
-                            @Message
-                            <button type="button" class="btn-close" @onclick="() => Message = null"></button>
-                        </div>
-                    }
-
-                    <!-- Error Message -->
-                    @if (!string.IsNullOrEmpty(errorMessage))
-                    {
-                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                            @errorMessage
-                            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
-                        </div>
-                    }
-
-                    <EditForm Model="loginModel" OnValidSubmit="HandleLogin" class="needs-validation">
-                        <DataAnnotationsValidator />
-                        <ValidationSummary class="text-danger mb-3" />
-
-                        <!-- Email -->
-                        <div class="mb-3">
-                            <label for="email" class="form-label fw-semibold">Email address</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-envelope"></i></span>
-                                <InputText id="email" class="form-control" @bind-Value="loginModel.Email" placeholder="name@company.com" autocomplete="username" />
-                            </div>
-                            <ValidationMessage For="() => loginModel.Email" class="text-danger small" />
-                        </div>
-
-                        <!-- Password -->
-                        <div class="mb-3">
-                            <label for="password" class="form-label fw-semibold">Password</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-lock"></i></span>
-                                <InputText id="password" type="@passwordInputType" class="form-control" @bind-Value="loginModel.Password" placeholder="••••••••" autocomplete="current-password" />
-                                <button type="button" class="btn btn-outline-secondary" @onclick="TogglePasswordVisibility">
-                                    <i class="@(showPassword ? "bi bi-eye-slash" : "bi bi-eye")"></i>
-                                </button>
-                            </div>
-                            <ValidationMessage For="() => loginModel.Password" class="text-danger small" />
-                        </div>
-
-                        <!-- Remember me + Forgot password -->
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <div class="form-check">
-                                <InputCheckbox id="remember" class="form-check-input" @bind-Value="loginModel.RememberMe" />
-                                <label class="form-check-label" for="remember">Remember me</label>
-                            </div>
-                            <a href="/forgot-password" class="text-decoration-none small">Forgot password?</a>
-                        </div>
-
-                        <!-- Login Button -->
-                        <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold" disabled="@isLoading">
-                            @(isLoading ? "Signing in..." : "Sign In")
-                        </button>
-                    </EditForm>
-
-                    <!-- Register link -->
-                    <div class="text-center mt-4">
-                        <span class="text-muted">Don't have an account? </span>
-                        <a href="/register" class="text-primary fw-semibold text-decoration-none">Register now</a>
-                    </div>
-
-                    <!-- Future external auth -->
-                    <div class="mt-4 pt-3 border-top text-center">
-                        @* Or sign in with Microsoft 365 / Google *@
-                    </div>
-                </div>
-            </div>
-        </div>
+    <MudTextField T="string" @bind-Value="model.Password" Label="Password" Variant="Variant.Outlined"
+                  InputType="@passwordInput" Adornment="Adornment.End" AdornmentIcon="@passwordIcon"
+                  OnAdornmentClick="TogglePasswordVisibility" Class="mb-4" Immediate="true" For="() => model.Password" autocomplete="current-password" />
+    
+    <div class="d-flex align-center justify-space-between mb-8">
+        <MudCheckBox T="bool" @bind-Value="model.RememberMe" Label="Remember me" Color="Color.Primary" />
+        <MudLink Href="/forgot-password" Color="Color.Primary">Forgot password?</MudLink>
     </div>
-</div>
+
+    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+               Size="Size.Large" FullWidth="true" Class="mb-4 rounded-xl" Style="height: 52px;">
+        Sign In
+    </MudButton>
+
+    <MudButton Variant="Variant.Text" Color="Color.Secondary" FullWidth="true"
+               OnClick="GoToRegister" Class="mt-2">
+        Don't have an account?
+    </MudButton>
+
+    <MudDivider Class="my-8" />
+
+    <!-- Social logins can be added here later -->
+</EditForm>
 
 @code {
-    private LoginModel loginModel = new();
-    private bool isLoading = false;
+    private LoginModel model = new();
+
     private bool showPassword = false;
-    private string passwordInputType => showPassword ? "text" : "password";
-    private string? errorMessage;
-
-    [SupplyParameterFromQuery] public string? Message { get; set; }   // Changed to set; for clearing if needed
-
-    [Inject] private LoginService loginService { get; init; } = default!;
-    [Inject] private NavigationManager navigationManager { get; init; } = default!;
-
-    protected override void OnInitialized()
-    {
-        // Optional: Auto-clear success message after a few seconds (if desired)
-        // if (!string.IsNullOrEmpty(Message)) { ... }
-    }
+    private InputType passwordInput = InputType.Password;
+    private string passwordIcon = Icons.Material.Filled.VisibilityOff;
 
     private void TogglePasswordVisibility()
     {
         showPassword = !showPassword;
+        passwordInput = showPassword ? InputType.Text : InputType.Password;
+        passwordIcon = showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff;
     }
 
-    private async Task HandleLogin()
+    protected override async Task OnParametersSetAsync()
     {
-        errorMessage = null;
-        isLoading = true;
-
-        try
-        {
-            ModelResult result = await loginService.LoginAsync(loginModel, CancellationToken.None);
-
-            if (result.Success)
-            {
-                navigationManager.NavigateTo("/");
-            }
-            else
-            {
-                errorMessage = result.Data?.ToString() ?? "Invalid email or password. Please try again.";
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"An unexpected error occurred: {ex.Message}";
-        }
-        finally
-        {
-            isLoading = false;
-        }
+        await base.OnParametersSetAsync();
+        await Users.ValidateLogin();
     }
+
+    private async Task LoginAsync() => await Users.LoginAsync(model);
+
+    private void GoToRegister() => Navigation.NavigateTo("/register");
 }

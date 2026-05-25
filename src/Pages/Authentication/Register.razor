@@ -1,160 +1,102 @@
 ﻿@page "/register"
 @using System.ComponentModel.DataAnnotations
 @using OutsourceTracker.Authentication
-@using OutsourceTracker.Services.Authentication
-@using System.Net
-@using OutsourceTracker.Services.DataModels
+@using OutsourceTracker.Services
 @layout EmptyLayout
+@inject NavigationManager Navigation
+@inject UserService Users
 
-<PageTitle>Register - Outsource Tracker</PageTitle>
+<EditForm Model="@model" OnValidSubmit="RegisterAsync">
+    <DataAnnotationsValidator />
 
-<div class="container">
-    <div class="row justify-content-center align-items-center min-vh-100">
-        <div class="col-12 col-md-8 col-lg-6 col-xl-5">
-            <!-- Card -->
-            <div class="card shadow-sm border-0">
-                <div class="card-body p-4 p-md-5">
-                    <div class="text-center mb-4">
-                        <h2 class="fw-bold text-primary">Outsource Tracker</h2>
-                        <p class="text-muted">Signup to track your outsourced work</p>
-                    </div>
+    <MudText Typo="Typo.h3" Align="Align.Center" Class="mb-8 fw-bold text-primary">Create Account</MudText>
 
-                    @if (!string.IsNullOrEmpty(errorMessage))
-                    {
-                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                            @errorMessage
-                            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
-                        </div>
-                    }
+    <MudTextField T="string" @bind-Value="model.Email" Label="Email Address" Variant="Variant.Outlined"
+                  Class="mb-6" Immediate="true" autocomplete="email" For="() => model.Email" />
 
-                    <EditForm Model="registerModel" OnValidSubmit="HandleRegister" class="needs-validation">
-                        <DataAnnotationsValidator />
-                        <ValidationSummary class="text-danger mb-3" />
+    <MudGrid Spacing="4">
+        <MudItem xs="12" sm="6">
+            <MudTextField T="string" @bind-Value="model.FirstName" Label="First Name" Variant="Variant.Outlined"
+                          Immediate="true" Class="mb-3" autocomplete="given-name" For="() => model.FirstName" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField T="string" @bind-Value="model.LastName" Label="Last Name" Variant="Variant.Outlined"
+                          Immediate="true" Class="mb-3" autocomplete="family-name" For="() => model.LastName" />
+        </MudItem>
+    </MudGrid>
+    
+    <MudGrid Spacing="4">
+        <MudItem xs="12" sm="6">
+            <MudTextField T="string" @bind-Value="model.AlphaCode" Label="Alpha Code" Variant="Variant.Outlined"
+                          Class="mb-3" Immediate="true"
+                          OnBlur="HandleAlphaCodeBlur"
+                          MaxLength="6" For="() => model.AlphaCode" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField T="string" @bind-Value="model.WorkdayId" Label="Workday ID" Variant="Variant.Outlined"
+                          Class="mb-3" Immediate="true"
+                          MaxLength="10" For="() => model.WorkdayId" />
+        </MudItem>
+    </MudGrid>
 
-                        <!-- First Name -->
-                        <div class="mb-3">
-                            <label for="firstName" class="form-label fw-semibold">First Name</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
-                                <InputText id="firstName" class="form-control" @bind-Value="registerModel.FirstName" placeholder="Greg" autocomplete="given-name" />
-                            </div>
-                            <ValidationMessage For="() => registerModel.FirstName" class="text-danger small" />
-                        </div>
+    <MudTextField T="string" @bind-Value="model.Password" Label="Password" Variant="Variant.Outlined"
+                  InputType="@passwordInput" Adornment="Adornment.End" AdornmentIcon="@passwordIcon"
+                  OnAdornmentClick="TogglePasswordVisibility" Class="mb-4" Immediate="true" autocomplete="new-password" For="() => model.Password" />
 
-                        <!-- Last Name -->
-                        <div class="mb-3">
-                            <label for="lastName" class="form-label fw-semibold">Last Name</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
-                                <InputText id="lastName" class="form-control" @bind-Value="registerModel.LastName" placeholder="Hammer" autocomplete="family-name" />
-                            </div>
-                            <ValidationMessage For="() => registerModel.LastName" class="text-danger small" />
-                        </div>
+    <MudTextField T="string" @bind-Value="model.ConfirmPassword" Label="Confirm Password" Variant="Variant.Outlined"
+                  InputType="@confirmPasswordInput" Adornment="Adornment.End" AdornmentIcon="@confirmPasswordIcon"
+                  OnAdornmentClick="ToggleConfirmPasswordVisibility" Class="mb-8" Immediate="true" autocomplete="new-password" For="() => model.ConfirmPassword" />
 
-                        <!-- ALPHA Code -->
-                        <div class="mb-3">
-                            <label for="alphaCode" class="form-label fw-semibold">Alpha Code</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-truck"></i></span>
-                                <InputText id="alphaCode" class="form-control" @bind-Value="registerModel.AlphaCode" placeholder="HAMG1" autocomplete="off" />
-                            </div>
-                            <ValidationMessage For="() => registerModel.AlphaCode" class="text-danger small" />
-                        </div>
+    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+               Size="Size.Large" FullWidth="true" Class="mb-4 rounded-xl" Style="height: 52px;">
+        Register
+    </MudButton>
 
-                        <!-- Workday Id -->
-                        <div class="mb-3">
-                            <label for="workdayId" class="form-label fw-semibold">Workday ID</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-suitcase-lg"></i></span>
-                                <InputText id="workdayId" class="form-control" @bind-Value="registerModel.WorkdayId" placeholder="123456" autocomplete="off" />
-                            </div>
-                            <ValidationMessage For="() => registerModel.WorkdayId" class="text-danger small" />
-                        </div>
+    <MudButton Variant="Variant.Text" Color="Color.Primary" FullWidth="true"
+               OnClick="GoToLogin" Class="mt-2">
+        Already have an account?
+    </MudButton>
 
-                        <!-- Email -->
-                        <div class="mb-3">
-                            <label for="email" class="form-label fw-semibold">Email Address</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-envelope"></i></span>
-                                <InputText id="email" class="form-control" @bind-Value="registerModel.Email" placeholder="name@company.com" autocomplete="email" />
-                            </div>
-                            <ValidationMessage For="() => registerModel.Email" class="text-danger small" />
-                        </div>
-
-                        <!-- Password -->
-                        <div class="mb-3">
-                            <label for="password" class="form-label fw-semibold">Password</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-lock"></i></span>
-                                <InputText id="password" name="new-password" type="@passwordInputType" class="form-control" @bind-Value="registerModel.Password" placeholder="••••••••" autocomplete="new-password" />
-                                <button type="button" class="btn btn-outline-secondary" @onclick="TogglePasswordVisibility">
-                                    <i class="@(showPassword ? "bi bi-eye-slash" : "bi bi-eye")"></i>
-                                </button>
-                            </div>
-                            <ValidationMessage For="() => registerModel.Password" class="text-danger small" />
-                        </div>
-
-                        <!-- Register Button -->
-                        <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold" disabled="@isLoading">
-                            @(isLoading ? "Registering..." : "Create Account")
-                        </button>
-                    </EditForm>
-
-                    <!-- Login link -->
-                    <div class="text-center mt-4">
-                        <span class="text-muted">Already have an account? </span>
-                        <a href="/login" class="text-primary fw-semibold text-decoration-none">Sign in</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="text-center mt-3">
-                <small class="text-muted">&copy; @DateTime.Now.Year Outsource Tracker</small>
-            </div>
-        </div>
-    </div>
-</div>
+    <MudDivider Class="my-8" />
+</EditForm>
 
 @code {
-    private RegisterModel registerModel = new();
-    private bool isLoading = false;
-    private bool showPassword = false;
-    private string passwordInputType => showPassword ? "text" : "password";
-    private string? errorMessage;
+    private RegisterModel model = new();
 
-    [Inject] private LoginService loginService { get; init; } = default!;
-    [Inject] private NavigationManager navigationManager { get; init; } = default!;
+    private bool showPassword = false;
+    private InputType passwordInput = InputType.Password;
+    private string passwordIcon = Icons.Material.Filled.VisibilityOff;
+
+    private bool showConfirmPassword = false;
+    private InputType confirmPasswordInput = InputType.Password;
+    private string confirmPasswordIcon = Icons.Material.Filled.VisibilityOff;
 
     private void TogglePasswordVisibility()
     {
         showPassword = !showPassword;
+        passwordInput = showPassword ? InputType.Text : InputType.Password;
+        passwordIcon = showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff;
     }
 
-    private async Task HandleRegister()
+    private void ToggleConfirmPasswordVisibility()
     {
-        errorMessage = null;   // Clear previous errors
-        isLoading = true;
+        showConfirmPassword = !showConfirmPassword;
+        confirmPasswordInput = showConfirmPassword ? InputType.Text : InputType.Password;
+        confirmPasswordIcon = showConfirmPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff;
+    }
 
-        try
+    private void HandleAlphaCodeBlur()
+    {
+        if (!string.IsNullOrEmpty(model.AlphaCode))
         {
-            ModelResult result = await loginService.RegisterAsync(registerModel, CancellationToken.None);
-
-            if (result.Success)
-            {
-                navigationManager.NavigateTo("/login?message=Registration successful. Please sign in.");
-            }
-            else
-            {
-                errorMessage = result.Data?.ToString() ?? "Registration failed. Please check your information and try again.";
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"An unexpected error occurred: {ex.Message}";
-        }
-        finally
-        {
-            isLoading = false;
+            model.AlphaCode = model.AlphaCode.ToUpperInvariant();
         }
     }
+
+    private async Task RegisterAsync()
+    {
+        await Users.RegisterUserAsync(model);
+    }
+
+    private void GoToLogin() => Navigation.NavigateTo("/");
 }

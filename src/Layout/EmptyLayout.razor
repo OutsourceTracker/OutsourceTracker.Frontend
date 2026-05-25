@@ -1,5 +1,28 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="min-vh-100 bg-light d-flex flex-column">
-    @Body
-</div>
+<MudThemeProvider Theme="@_theme" />
+<MudLayout Class="mud-background-gradient">
+    <MudContainer MaxWidth="MaxWidth.ExtraSmall"
+                  Class="d-flex align-center justify-center min-vh-100 pa-6">
+        
+        <MudPaper Elevation="8"
+                  Class="pa-10 rounded-3xl w-100 glass-card">
+            @Body
+        </MudPaper>
+    </MudContainer>
+</MudLayout>
+
+<MudSnackbarProvider />
+
+@code {
+    private readonly MudTheme _theme = new()
+    {
+        PaletteDark = new PaletteDark
+        {
+            Background = "#0f0f1a",
+            Surface = "#1a1a2e",
+            Primary = "#667eea",
+            Secondary = "#764ba2"
+        }
+    };
+}

@@ -1,0 +1,72 @@
+﻿@page "/dashboard"
+@using Microsoft.AspNetCore.Authorization
+@using OutsourceTracker.Authentication
+@using System.Security.Claims
+@using System.IdentityModel.Tokens.Jwt
+@attribute [Authorize]
+@inject ITokenService Token
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="d-flex flex-column justify-center align-center" Style="min-height: 80vh;">
+    <MudCard Class="pa-8" Style="width: 100%; max-width: 480px; box-shadow: 0 8px 32px rgba(0,0,0,0.12);">
+        @if (User != null)
+        {
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <div class="d-flex flex-column align-center">
+                        <MudAvatar Size="Size.Large" Class="mb-4" Style="width: 120px; height: 120px; font-size: 3rem;">
+                            AU
+                        </MudAvatar>
+                        <MudText Typo="Typo.h4" Class="mb-1">@User.Identity!.Name</MudText>
+                        <MudText Typo="Typo.body1" Color="Color.Secondary">@User.FindFirst("alphacode")!.Value</MudText>
+                    </div>
+                </CardHeaderContent>
+            </MudCardHeader>
+
+            <MudCardContent Class="pt-0">
+                <MudDivider Class="my-6" />
+
+                <div class="d-flex flex-column gap-4">
+                    <div class="d-flex justify-space-between">
+                        <MudText><MudIcon Icon="@Icons.Material.Filled.Email" Class="mr-2" /> Email</MudText>
+                        <MudText Color="Color.Primary">@User.FindFirst(JwtRegisteredClaimNames.Email)!.Value</MudText>
+                    </div>
+
+                    <div class="d-flex justify-space-between">
+                        <MudText><MudIcon Icon="@Icons.Material.Filled.LocationOn" Class="mr-2" /> Location</MudText>
+                        <MudText>Sumner, WA</MudText>
+                    </div>
+                </div>
+            </MudCardContent>
+
+            <MudCardActions Class="justify-center pt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="px-8">
+                    Edit Profile
+                </MudButton>
+            </MudCardActions>
+        }
+    </MudCard>
+
+    <MudText Typo="Typo.caption" Class="mt-6 text-center" Color="Color.Warning">
+        OutsourceTracker Dashboard • Prototype v0.1
+    </MudText>
+</MudContainer>
+
+@code
+{
+    private ClaimsPrincipal? User { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+        string? token = await Token.GetTokenAsync();
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return;
+        }
+
+        ClaimsPrincipal? user = await Token.ValidateTokenAsync(token!);
+        User = user;
+        StateHasChanged();
+    }
+}
