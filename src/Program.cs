@@ -4,7 +4,10 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor;
 using MudBlazor.Services;
 using OutsourceTracker.Authentication;
+using OutsourceTracker.Equipment.Trailers;
 using OutsourceTracker.Services;
+using OutsourceTracker.Services.Equipment;
+using OutsourceTracker.Services.Equipment.Trailers;
 
 namespace OutsourceTracker
 {
@@ -42,9 +45,13 @@ namespace OutsourceTracker
             .AddHttpMessageHandler<AuthHttpMessageHandler>();
 
             builder.Services.AddScoped<UserService>();
+            builder.Services.AddScoped<AuthHttpMessageHandler>();
             builder.Services.AddScoped<ITokenService, JwtTokenService>();
             builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
             builder.Services.AddScoped<ClipboardService>();
+            builder.Services.AddScoped<TrailerService>()
+                .AddScoped<IEquipmentService<TrailerModel>>(s => s.GetRequiredService<TrailerService>());
+            builder.Services.AddMemoryCache();
             builder.Services.AddMudServices(config =>
             {
                 config.SnackbarConfiguration.PositionClass = Defaults.Classes.Position.BottomCenter;

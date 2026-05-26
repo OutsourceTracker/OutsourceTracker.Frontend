@@ -1,0 +1,57 @@
+﻿@using OutsourceTracker.Equipment.Trailers
+@using OutsourceTracker.Services.Equipment
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IEquipmentService<TrailerModel> Trailer
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="model" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Prefix" @bind-Value="model.Prefix" Required="true" For="() => model.Prefix" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="Name/Number" @bind-Value="model.Name" Required="true" For="() => model.Name" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudSelect Label="State" @bind-Value="model.Type" Required="true" For="() => model.Type">
+                        <MudSelectItem Value="TrailerType.Van">Dry Van</MudSelectItem>
+                        <MudSelectItem Value="TrailerType.Reefer">Reefer</MudSelectItem>
+                        <MudSelectItem Value="TrailerType.Flatbed">Flatbed</MudSelectItem>
+                        <MudSelectItem Value="TrailerType.Conestoga">Conestoga</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                @* <MudItem xs="12">
+                    <MudTextField Label="Zone Name" @bind-Value="model.ZoneName" />
+                </MudItem> *@
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="HandleSubmit">Create Trailer</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private TrailerCreateRequest model = new();
+
+    private async Task HandleSubmit()
+    {
+        TrailerModel? trailer = await Trailer.CreateAsync(model);
+        if (trailer != null)
+        {
+            MudDialog.Close(trailer);
+        }
+        else
+        {
+            Snackbar.Add("Failed to create trailer", Severity.Error);
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}

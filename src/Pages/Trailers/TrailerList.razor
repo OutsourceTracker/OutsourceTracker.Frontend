@@ -1,15 +1,29 @@
 ﻿@page "/trailers"
 @using OutsourceTracker.Equipment
 @using OutsourceTracker.Equipment.Trailers
-@inject HttpClient Http
+@using OutsourceTracker.Services.Equipment
+@inject IEquipmentService<TrailerModel> Trailers
+@inject IDialogService DialogService
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-    <MudText Typo="Typo.h4" GutterBottom="true">Trailers Management</MudText>
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 pb-4"
+              Style="height: calc(100vh - 64px); display: flex; flex-direction: column;">
+    
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h4" GutterBottom="true">Trailers</MudText>
+        <MudButtonGroup Color="Color.Primary" Variant="Variant.Filled">
+            <MudIconButton Icon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog" />
+            <MudIconButton Icon="@Icons.Material.Filled.LibraryAdd" OnClick="OpenBulkAddDialog" />
+            <MudIconButton Icon="@Icons.Material.Filled.DeleteForever" Disabled="@(selectedTrailer == null)" OnClick="OpenDeleteDialog" />
+            <MudButton StartIcon="@Icons.Material.Filled.Map" IconColor="Color.Surface" Disabled="@(selectedTrailer == null)" OnClick="OpenSpotDialog">
+                Spot
+            </MudButton>
+        </MudButtonGroup>
+    </div>
 
-    <MudGrid Spacing="4">
-        <!-- Left: List -->
-        <MudItem xs="12" md="5" Style="height: calc(100vh - 150px); overflow: auto;">
-            <MudCard Class="h-100">
+    <MudGrid Spacing="4" Class="flex-grow-1">
+        <!-- Left: Trailer List - FIXED SCROLLING -->
+        <MudItem xs="12" md="5" Style="height: 100%;">
+            <MudCard Class="h-100 d-flex flex-column">
                 <MudCardHeader>
                     <CardHeaderContent>
                         <MudText Typo="Typo.h6">Trailer List (@filteredTrailers.Count)</MudText>
@@ -19,50 +33,59 @@
                                       Placeholder="Search trailers..."
                                       Adornment="Adornment.Start"
                                       AdornmentIcon="@Icons.Material.Filled.Search"
-                                      Immediate="true" OnKeyUp="FilterTrailers" />
+                                      Immediate="true"
+                                      OnKeyUp="FilterTrailers"
+                                      Class="w-100" />
                     </CardHeaderActions>
                 </MudCardHeader>
-                <MudCardContent>
-                    <MudList T="TrailerModel" Dense="true">
-                        @foreach (var trailer in filteredTrailers)
-                        {
-                            <MudListItem OnClick="() => SelectTrailer(trailer)">
-                                <div class="d-flex flex-column">
-                                    <div class="d-flex justify-space-between">
-                                        <MudText Typo="Typo.body1"><strong>@trailer.FullName</strong></MudText>
-                                        <MudChip Color="@GetStatusColor(trailer.State)" Size="Size.Small">@trailer.State</MudChip>
+                
+                <MudCardContent Class="flex-grow-1 pa-0" Style="min-height: 0; display: flex; flex-direction: column;">
+                    <!-- This wrapper is critical for scrolling -->
+                    <div style="flex: 1 1 auto; overflow-y: auto; min-height: 0;">
+                        <MudList T="TrailerModel" Dense="true">
+                            @foreach (var trailer in filteredTrailers)
+                            {
+                                <MudListItem OnClick="() => SelectTrailer(trailer)" Class="py-3">
+                                    <div class="d-flex flex-column w-100">
+                                        <div class="d-flex justify-space-between align-center">
+                                            <MudText Typo="Typo.body1"><strong>@trailer.FullName</strong></MudText>
+                                            <MudChipSet SelectionMode="SelectionMode.SingleSelection" ReadOnly="true" Variant="Variant.Outlined" Size="Size.Small">
+                                                <MudChip Color="Color.Dark">@trailer.Type</MudChip>
+                                                <MudChip Color="@GetStatusColor(trailer.State)">@trailer.State</MudChip>
+                                            </MudChipSet>
+                                        </div>
+
+                                        <MudText Typo="Typo.body2" Color="Color.Primary">Location: @GetLocationString(trailer)</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            Last updated: @trailer.CreatedOn.ToLocalTime().ToString("g")
+                                        </MudText>
                                     </div>
-                                    <MudText Typo="Typo.body2" Color="Color.Primary">@trailer.ZoneName</MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Last updated: @trailer.CreatedOn.ToLocalTime().ToString("g")</MudText>
-                                </div>
-                            </MudListItem>
-                        }
-                    </MudList>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    </div>
                 </MudCardContent>
             </MudCard>
         </MudItem>
 
         <!-- Right: Map -->
-        <MudItem xs="12" md="7" Style="height: calc(100vh - 150px);">
-            <MudCard Class="h-100">
+        <MudItem xs="12" md="7" Style="height: 100%;">
+            <MudCard Class="h-100 d-flex flex-column">
                 <MudCardHeader>
                     <CardHeaderContent>
                         <MudText Typo="Typo.h6">Live Location Map</MudText>
                     </CardHeaderContent>
                 </MudCardHeader>
-                <MudCardContent Class="pa-0" Style="height: calc(100% - 60px); position: relative;">
-                    <!-- Google Maps Placeholder / Container -->
+                <MudCardContent Class="flex-grow-1 pa-0 position-relative">
                     <div id="googleMap"
-                         style="width: 100%; height: 100%; background: #e0e0e0; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center;">
+                         style="width: 100%; height: 100%; background: #e0e0e0; border: 1px solid #ccc;
+                        display: flex; align-items: center; justify-content: center;">
                         <div style="text-align: center; color: #666;">
                             <MudIcon Icon="@Icons.Material.Filled.Map" Size="Size.Large" />
                             <p class="mt-2">Google Maps will load here</p>
                             <p class="caption">Markers for all trailers will appear on the map</p>
                         </div>
                     </div>
-
-                    <!-- Future map integration placeholder comment -->
-                    <!-- <GoogleMap @ref="_map" ... /> -->
                 </MudCardContent>
             </MudCard>
         </MudItem>
@@ -84,40 +107,25 @@
     {
         try
         {
-            allTrailers = new()
-            {
-                new TrailerModel
-                {
-                    Id = Guid.NewGuid(),
-                    Name = "200146",
-                    Prefix = "JBHZ",
-                    State = Equipment.EquipmentState.Available,
-                    FullName = "JBHZ 200146",
-                    ZoneName = "WinCo Yakima"
-                },
-                new TrailerModel
-                {
-                    Id = Guid.NewGuid(),
-                    Name = "202657",
-                    Prefix = "JBHZ",
-                    State = Equipment.EquipmentState.Available,
-                    FullName = "JBHZ 202657",
-                    ZoneName = "WinCo Yakima"
-                }
-            };
+            allTrailers = await Trailers.ListAsync().ToListAsync();
             filteredTrailers = allTrailers.ToList();
         }
         catch (Exception ex)
         {
-            // TODO: Add MudSnackbar notification
             Console.WriteLine($"Error loading trailers: {ex.Message}");
         }
+    }
+
+    private async Task OnTrailerCreated(TrailerModel trailer)
+    {
+        allTrailers.Add(trailer);
+        FilterTrailers();
+        StateHasChanged();
     }
 
     private void SelectTrailer(TrailerModel trailer)
     {
         selectedTrailer = trailer;
-        // TODO: Center map on selected trailer when map is implemented
         StateHasChanged();
     }
 
@@ -129,7 +137,6 @@
         _ => Color.Default
     };
 
-    // Search filter
     private void FilterTrailers()
     {
         if (string.IsNullOrWhiteSpace(searchTerm))
@@ -144,10 +151,65 @@
         }
     }
 
-    // Called via @bind-Value after debounce or on input
-    private void OnSearchChanged(string value)
+    private string GetLocationString(TrailerModel trailer)
     {
-        searchTerm = value;
-        FilterTrailers();
+        if (trailer.ZoneName != null) return trailer.ZoneName;
+        if (trailer.Location.HasValue)
+        {
+            string coords = $"{trailer.Location.Value.X:F4}, {trailer.Location.Value.Y:F4}";
+            return coords;
+        }
+        return "Unknown";
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var instance = await DialogService.ShowAsync<CreateTrailerDialog>("Create New Trailer");
+        var result = await instance.GetReturnValueAsync<TrailerModel>();
+        if (result != null)
+        {
+            await OnTrailerCreated(result);
+        }
+    }
+
+    private async Task OpenBulkAddDialog()
+    {
+        var instance = await DialogService.ShowAsync<BulkCreateTrailersDialog>("Bulk Create Trailers");
+        var result = await instance.GetReturnValueAsync<List<TrailerModel>>();
+        if (result != null)
+        {
+            foreach (var trailer in result)
+            {
+                await OnTrailerCreated(trailer);
+            }
+        }
+    }
+
+    private async Task OpenDeleteDialog()
+    {
+        if (selectedTrailer == null) return;
+
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, $"Are you sure you want to delete trailer {selectedTrailer!.FullName}? This process cannot be undone." },
+            { x => x.ButtonText, "Delete" },
+            { x => x.Color, Color.Error }
+        };
+
+        var instance = await DialogService.ShowAsync<ConfirmationDialog>("Delete Trailer?", parameters);
+        var result = await instance.Result;
+
+        if (result?.Canceled == true) return;
+
+        await Trailers.DeleteAsync(selectedTrailer.Id);
+        allTrailers.Remove(selectedTrailer);
+        filteredTrailers.Remove(selectedTrailer);
+        selectedTrailer = null;
+        StateHasChanged();
+    }
+
+    private async Task OpenSpotDialog()
+    {
+        // TODO: Implement map logic
     }
 }

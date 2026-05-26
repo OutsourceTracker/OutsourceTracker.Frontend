@@ -1,0 +1,150 @@
+﻿@using OutsourceTracker.Equipment.Trailers
+@using OutsourceTracker.Services
+@using OutsourceTracker.Services.Equipment
+@inject IEquipmentService<TrailerModel> Trailers
+@inject ClipboardService Clipboard
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true">
+    <DialogContent>
+        <MudText Typo="Typo.h6" GutterBottom="true">Add Multiple Trailers</MudText>
+        <MudText Typo="Typo.body2" Class="mb-4">Add as many trailers as needed. Click "Add Row" to continue.</MudText>
+
+        <MudTable Items="@items" Hover="true" Dense="true" Class="mb-4">
+            <ToolBarContent>
+                <MudButton OnClick="AddRow" StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Outlined">Add Row</MudButton>
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh>Prefix</MudTh>
+                <MudTh>Name/Number</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudTextField @bind-Value="context.Prefix" Immediate="true" For="() => context.Prefix" />
+                </MudTd>
+                <MudTd>
+                    <MudTextField @bind-Value="context.Name" Immediate="true" For="() => context.Name" />
+                </MudTd>
+                <MudTd>
+                    <MudSelect T="TrailerType" @bind-Value="context.Type" Style="min-width:140px;" For="() => context.Type">
+                        <MudSelectItem Value="TrailerType.Van">Dry Van</MudSelectItem>
+                        <MudSelectItem Value="TrailerType.Reefer">Reefer</MudSelectItem>
+                        <MudSelectItem Value="TrailerType.Flatbed">Flatbed</MudSelectItem>
+                        <MudSelectItem Value="TrailerType.Conestoga">Conestoga</MudSelectItem>
+                    </MudSelect>
+                </MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => RemoveRow(context)" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="HandleBulkCreate" Disabled="@(!items.Any())">Create @items.Count Trailers</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private List<TrailerCreateRequest> items = new() { new TrailerCreateRequest() };
+
+    private void AddRow() => items.Add(new TrailerCreateRequest());
+
+    private void RemoveRow(TrailerCreateRequest item)
+    {
+        if (items.Count > 1)
+            items.Remove(item);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+        await ProcessClipboardData();
+    }
+
+    private async Task ProcessClipboardData()
+    {
+        try
+        {
+            var text = await Clipboard.ReadTextAsync();
+
+            string[] rows = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+            List<TrailerCreateRequest> content = new();
+            for (int i = 0; i < rows.Length; i++)
+            {
+                string[] valuesSplit = rows[i].Split('\t', StringSplitOptions.RemoveEmptyEntries);
+                string prefix = valuesSplit[0].Trim();
+                string name = valuesSplit[1].Trim();
+                string typeStr = valuesSplit[2].Trim();
+
+                TrailerCreateRequest t = new()
+                {
+                    Prefix = prefix.ToUpper(),
+                    Name = name.ToUpper(),
+                    Type = Enum.TryParse<TrailerType>(typeStr, true, out var type) ? type : TrailerType.Van
+                };
+
+                while (t.Name.Length < 6)
+                {
+                    t.Name = "0" + t.Name;
+                }
+
+                content.Add(t);
+            }
+
+            if (content.Count > 0)
+            {
+                items.Clear();
+                items.AddRange(content);
+                Snackbar.Add($"Parsed {content.Count} trailers from clipboard", Severity.Success);
+                await Clipboard.ClearAsync();
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+
+        }
+    }
+
+    private async Task HandleBulkCreate()
+    {
+        if (items.Count == 0) return;
+
+        List<TrailerModel> created = new();
+        for (int i = 0; i < items.Count; i++)
+        {
+            TrailerCreateRequest item = items[i];
+
+            if (string.IsNullOrWhiteSpace(item.Prefix) || string.IsNullOrWhiteSpace(item.Name))
+            {
+                continue;
+            }
+
+            TrailerModel? trailerModel = await Trailers.CreateAsync(item);
+
+            if (trailerModel != null)
+            {
+                created.Add(trailerModel);
+            }
+        }
+
+        if (created.Count > 0)
+        {
+            Snackbar.Add($"Successfully created {created.Count} trailers", Severity.Success);
+            MudDialog.Close(created);
+        }
+        else
+        {
+            Snackbar.Add("Failed to create trailers. Please check your input and try again.", Severity.Error);
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}

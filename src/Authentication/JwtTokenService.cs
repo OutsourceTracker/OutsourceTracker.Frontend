@@ -126,7 +126,7 @@ public class JwtTokenService : ITokenService
                 return null;
             }
 
-            var identity = new ClaimsIdentity(jwt.Claims, "jwt", JwtRegisteredClaimNames.Name, ClaimTypes.Role);
+            var identity = new ClaimsIdentity(jwt.Claims, "jwt");
             var principal = new ClaimsPrincipal(identity);
 
             Logger.LogInformation("Token validated successfully. User: {User}", principal.Identity?.Name);
