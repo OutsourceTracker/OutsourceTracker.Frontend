@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
-using Microsoft.JSInterop;
 using MudBlazor;
 using MudBlazor.Services;
 using OutsourceTracker.Authentication;
@@ -97,14 +96,6 @@ namespace OutsourceTracker
                 Console.Error.WriteLine(ex.ToString());
                 Console.Error.WriteLine("=== END FATAL ERROR ===");
 
-                // Try to show a visible message on the loading screen
-                try
-                {
-                    await Task.Delay(10);
-                    await JSRuntimeExtensions.InvokeVoidAsync(null!, "updateLoadingStatus", "ERROR: " + ex.Message);
-                }
-                catch { }
-
                 throw;
             }
         }
@@ -112,19 +103,7 @@ namespace OutsourceTracker
         private static void Log(string message)
         {
             var ts = DateTime.UtcNow.ToString("HH:mm:ss.fff");
-            var msg = $"[Startup {ts}] {message}";
-            Console.WriteLine(msg);
-
-            // Also update the visible loading status (best effort)
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await Task.Delay(1);
-                    await JSRuntimeExtensions.InvokeVoidAsync(null!, "updateLoadingStatus", message);
-                }
-                catch { /* too early */ }
-            });
+            Console.WriteLine($"[Startup {ts}] {message}");
         }
     }
 }
