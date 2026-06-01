@@ -28,6 +28,7 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.8" />
     <PackageReference Include="MudBlazor" Version="9.4.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.18.0" />
+	<PackageReference Include="OutsourceTracker.Common" Version="0.1.34-feature-auth0043" />
   </ItemGroup>
 
   <ItemGroup>
@@ -44,10 +45,6 @@
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\OutsourceTracker.Common\src\OutsourceTracker.Common.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="package_icon.jpg">
