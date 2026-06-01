@@ -54,18 +54,20 @@ RUN if ! ls /app/publish/wwwroot/_framework/blazor.webassembly*.js 1>/dev/null 2
 # ============================================
 # Final runtime image
 # ============================================
-# We use fabiocicerchia/nginx-lua:alpine because it ships with the
-# Brotli (ngx_brotli) modules pre-compiled. This avoids the flaky
-# source compilation we had before.
-# The ENABLE_BROTLI build arg only controls whether the Brotli
-# directives are active in the generated nginx.conf.
-FROM fabiocicerchia/nginx-lua:alpine AS final
+# Use standard nginx:alpine.
+# When ENABLE_BROTLI=true, we install the official Alpine brotli module package.
+FROM nginx:alpine AS final
 ARG ENABLE_BROTLI=true
 
 WORKDIR /app
 
 # Copy the published Blazor output
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
+
+# Install Brotli module when requested (Alpine package)
+RUN if [ "$ENABLE_BROTLI" = "true" ]; then \
+      apk add --no-cache nginx-mod-http-brotli; \
+    fi
 
 # Copy and process nginx config (enables Brotli directives only when requested)
 COPY nginx.conf /etc/nginx/nginx.conf.tmp
