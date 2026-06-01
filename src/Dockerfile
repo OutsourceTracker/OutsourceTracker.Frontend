@@ -1,9 +1,18 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# Build arguments (can be overridden with --build-arg)
 ARG BUILD_CONFIGURATION=Release
 ARG VERSION=0.0.1
 ARG ASSEMBLY_VERSION=0.0.1.0
 ARG FILE_VERSION=0.0.1.0
 ARG INFORMATIONAL_VERSION=0.0.1+unknown
+ARG ENABLE_BROTLI=true
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG BUILD_CONFIGURATION
+ARG VERSION
+ARG ASSEMBLY_VERSION
+ARG FILE_VERSION
+ARG INFORMATIONAL_VERSION
+ARG ENABLE_BROTLI
 WORKDIR /src
 
 COPY ["OutsourceTracker.Frontend.csproj", "."]
@@ -29,7 +38,7 @@ RUN if [ -d "prebuilt-publish" ] && [ "$(ls -A prebuilt-publish)" ]; then \
         /p:FileVersion=${FILE_VERSION} \
         /p:InformationalVersion=${INFORMATIONAL_VERSION} \
         /p:AssemblyInformationalVersion=${INFORMATIONAL_VERSION} \
-        /p:BlazorEnableCompression=false; \
+        /p:BlazorWebAssemblyEnableCompression=true; \
     fi
 
 # Verify that the critical Blazor WebAssembly loader exists (only checking webassembly, per requirements)
@@ -42,9 +51,58 @@ RUN if ! ls /app/publish/wwwroot/_framework/blazor.webassembly*.js 1>/dev/null 2
       echo "✓ Verified blazor.webassembly*.js exists in published output"; \
     fi
 
+# ============================================
+# Stage: Build ngx_brotli module for nginx (conditional)
+# ============================================
+FROM alpine:3.19 AS brotli-builder
+ARG ENABLE_BROTLI=true
+
+RUN if [ "$ENABLE_BROTLI" = "true" ]; then \
+      apk add --no-cache \
+        git \
+        gcc \
+        make \
+        musl-dev \
+        pcre-dev \
+        zlib-dev \
+        linux-headers \
+        openssl-dev \
+        nginx-dev && \
+      git clone --depth 1 https://github.com/google/ngx_brotli.git /ngx_brotli && \
+      cd /ngx_brotli && \
+      git submodule update --init --recursive && \
+      cd /ngx_brotli && \
+      ./configure --with-compat --add-dynamic-module=/ngx_brotli && \
+      make modules; \
+    else \
+      mkdir -p /ngx_brotli/objs; \
+    fi
+
+# ============================================
+# Final runtime image
+# ============================================
 FROM nginx:alpine AS final
+ARG ENABLE_BROTLI=true
+
+# Copy brotli modules only if enabled (the directory will exist but may be empty)
+COPY --from=brotli-builder /ngx_brotli/objs/ /etc/nginx/modules/ 2>/dev/null || true
+
 WORKDIR /app
+
+# Copy the published Blazor output
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy nginx config and enable/disable Brotli directives based on build arg
+COPY nginx.conf /etc/nginx/nginx.conf.tmp
+RUN if [ "$ENABLE_BROTLI" = "true" ]; then \
+      # Enable Brotli lines (remove the marker prefix)
+      sed -i 's/#BROTLION# //g' /etc/nginx/nginx.conf.tmp && \
+      mv /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf; \
+    else \
+      # Disable Brotli (turn the marker into a regular comment)
+      sed -i 's/#BROTLION# /# /g' /etc/nginx/nginx.conf.tmp && \
+      mv /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf; \
+    fi
+
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
