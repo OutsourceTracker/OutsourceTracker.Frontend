@@ -138,3 +138,4 @@ jobs:
             ASSEMBLY_VERSION=${{ needs.build-frontend.outputs.gitversion-assemblysemver }}
             FILE_VERSION=${{ needs.build-frontend.outputs.gitversion-assemblysemfilever }}
             INFORMATIONAL_VERSION=${{ needs.build-frontend.outputs.gitversion-informationalversion }}
+            ENABLE_BROTLI=true

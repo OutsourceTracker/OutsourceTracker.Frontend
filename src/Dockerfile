@@ -52,56 +52,21 @@ RUN if ! ls /app/publish/wwwroot/_framework/blazor.webassembly*.js 1>/dev/null 2
     fi
 
 # ============================================
-# Stage: Build ngx_brotli module for nginx (conditional)
-# ============================================
-FROM alpine:3.19 AS brotli-builder
-ARG ENABLE_BROTLI=true
-
-RUN if [ "$ENABLE_BROTLI" = "true" ]; then \
-      set -eux; \
-      apk add --no-cache --virtual .brotli-build \
-        git \
-        gcc \
-        g++ \
-        make \
-        musl-dev \
-        pcre-dev \
-        zlib-dev \
-        linux-headers \
-        openssl-dev \
-        nginx-dev \
-        cmake; \
-      git clone --depth 1 https://github.com/google/ngx_brotli.git /ngx_brotli; \
-      cd /ngx_brotli && git submodule update --init --recursive; \
-      # Build the brotli library itself
-      cd /ngx_brotli/deps/brotli && mkdir -p out && cd out && \
-      cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local .. && \
-      make -j$(nproc) && make install; \
-      # Build the nginx dynamic modules
-      cd /ngx_brotli && \
-      ./configure --with-compat --add-dynamic-module=. && \
-      make -j$(nproc) modules; \
-      # Cleanup
-      apk del .brotli-build; \
-    else \
-      mkdir -p /ngx_brotli/objs; \
-    fi
-
-# ============================================
 # Final runtime image
 # ============================================
-FROM nginx:alpine AS final
+# When Brotli is enabled, we use a pre-built nginx image (fabiocicerchia/nginx-lua:alpine)
+# that already ships with the Brotli modules compiled in. This avoids the flaky
+# source compilation of ngx_brotli during CI builds.
+FROM fabiocicerchia/nginx-lua:alpine AS final
 ARG ENABLE_BROTLI=true
-
-# Copy brotli modules (only present when ENABLE_BROTLI=true)
-COPY --from=brotli-builder /ngx_brotli/objs/*.so /etc/nginx/modules/ 2>/dev/null || true
 
 WORKDIR /app
 
 # Copy the published Blazor output
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
 
-# Copy nginx config and enable/disable Brotli directives based on build arg
+# Copy nginx config and enable/disable Brotli directives based on build arg.
+# The image already has Brotli modules at /usr/lib/nginx/modules/
 COPY nginx.conf /etc/nginx/nginx.conf.tmp
 RUN if [ "$ENABLE_BROTLI" = "true" ]; then \
       # Enable Brotli lines (remove the marker prefix)
