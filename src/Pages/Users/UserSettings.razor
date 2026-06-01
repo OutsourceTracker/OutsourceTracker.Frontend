@@ -2,7 +2,12 @@
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using MudBlazor
+@using OutsourceTracker.Authentication
+@using OutsourceTracker.Pages.Dialogs
+@inject UserService Users
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject IDialogService DialogService
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-8">
     <MudCard>
@@ -12,19 +17,19 @@
             </CardHeaderContent>
         </MudCardHeader>
         <MudCardContent>
-            <MudForm @ref="_form" @bind-IsValid="_isValid">
-                <MudTextField T="string" Label="Full Name" Required="true" />
-                <MudTextField T="string" Label="Alpha Code" Required="true" />
-                <MudTextField T="string" Label="Workday ID" />
+            <MudForm @ref="_form" @bind-IsValid="_isValid" Model="_model">
+                <MudTextField @bind-Value="_model.FullName" Label="Full Name" Required="true" />
+                <MudTextField @bind-Value="_model.AlphaCode" Label="Alpha Code" Required="true" />
+                <MudTextField @bind-Value="_model.WorkdayId" Label="Workday ID" />
 
                 <MudDivider Class="my-6" />
 
                 <MudText Typo="Typo.h6" Class="mb-4">Preferences</MudText>
 
-                <MudSwitch T="bool" Label="Enable Notifications" Color="Color.Primary" />
-                <MudSwitch T="bool" Label="Dark Mode" Color="Color.Primary" />
-                <MudSwitch T="bool" Label="Auto-save Reports" Color="Color.Primary" />
-                <MudSwitch T="bool" Label="Email Daily Summaries" Color="Color.Primary" />
+                <MudSwitch T="bool" Label="Enable Notifications" Color="Color.Primary" @bind-Value="_model.EnableNotifications" />
+                <MudSwitch T="bool" Label="Dark Mode" Color="Color.Primary" @bind-Value="_model.DarkMode" />
+                <MudSwitch T="bool" Label="Auto-save Reports" Color="Color.Primary" @bind-Value="_model.AutoSaveReports" />
+                <MudSwitch T="bool" Label="Email Daily Summaries" Color="Color.Primary" @bind-Value="_model.EmailDailySummaries" />
             </MudForm>
         </MudCardContent>
         <MudCardActions>
@@ -33,22 +38,76 @@
             </MudButton>
         </MudCardActions>
     </MudCard>
+
+    <!-- Passkey Management -->
+    <MudCard Class="mt-6">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">Passkeys</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Secure passwordless sign-in using your device (fingerprint, face ID, security key, etc.)</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (_passkeys.Any())
+            {
+                <MudList T="UserService.PasskeyInfo" Dense="true">
+                    @foreach (var pk in _passkeys)
+                    {
+                        <MudListItem>
+                            <div class="d-flex justify-space-between align-center w-100">
+                                <div>
+                                    <MudText Typo="Typo.body1">@(pk.Name ?? "Unnamed Passkey")</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        Created: @pk.CreatedOn.ToLocalTime().ToString("g")
+                                        @if (pk.LastUsedOn.HasValue)
+                                        {
+                                            <span> • Last used: @pk.LastUsedOn.Value.ToLocalTime().ToString("g")</span>
+                                        }
+                                    </MudText>
+                                </div>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                               OnClick="() => DeletePasskey(pk.CredentialId)" />
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">No passkeys registered yet.</MudText>
+            }
+        </MudCardContent>
+        <MudCardActions>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Fingerprint"
+                       OnClick="RegisterNewPasskey">
+                Add New Passkey
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
 </MudContainer>
 
 @code {
-    //private UserSettingsDto _model = new();
+    private UserProfileModel _model = new();
     private MudForm? _form;
     private bool _isValid;
+
+    private List<UserService.PasskeyInfo> _passkeys = new();
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-           // _model = await Http.GetFromJsonAsync<UserSettingsDto>("api/UserSettings") ?? new();
+            var profile = await Users.GetProfileAsync();
+            if (profile != null)
+            {
+                _model = profile;
+            }
+
+            await LoadPasskeys();
         }
         catch
         {
-            Snackbar.Add("Failed to load settings", Severity.Error);
+            Snackbar.Add("Failed to load profile", Severity.Error);
         }
     }
 
@@ -56,8 +115,75 @@
     {
         if (_form is null) return;
 
-        await _form.Validate();
+        await _form.ValidateAsync();
 
         if (!_isValid) return;
+
+        var updateRequest = new UpdateProfileRequest
+        {
+            FirstName = _model.FirstName,
+            LastName = _model.LastName,
+            AlphaCode = _model.AlphaCode,
+            WorkdayId = _model.WorkdayId
+        };
+
+        bool success = await Users.UpdateProfileAsync(updateRequest);
+        if (success)
+        {
+            Snackbar.Add("Settings saved successfully", Severity.Success);
+        }
+    }
+
+    private async Task LoadPasskeys()
+    {
+        _passkeys = await Users.GetUserPasskeysAsync() ?? new();
+        StateHasChanged();
+    }
+
+    private async Task RegisterNewPasskey()
+    {
+        try
+        {
+            var parameters = new DialogParameters<PasskeyNameDialog>();
+            var dialog = await DialogService.ShowAsync<PasskeyNameDialog>("Name this Passkey", parameters);
+            var result = await dialog.Result;
+
+            if (result?.Canceled == true || result?.Data is not string passkeyName || string.IsNullOrWhiteSpace(passkeyName))
+                return;
+
+            // 1. Get creation options from server
+            var optionsJson = await Users.GetPasskeyRegistrationOptionsAsync(passkeyName);
+            if (string.IsNullOrWhiteSpace(optionsJson)) return;
+
+            // 2. Call browser WebAuthn API
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/passkey.js");
+            var credential = await module.InvokeAsync<object>("createPasskey", optionsJson);
+
+            if (credential == null)
+            {
+                Snackbar.Add("Passkey creation was cancelled.", Severity.Warning);
+                return;
+            }
+
+            // 3. Complete registration on server
+            await Users.CompletePasskeyRegistrationAsync(credential);
+
+            await LoadPasskeys();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to register passkey: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeletePasskey(string credentialId)
+    {
+        // Simple confirmation using Snackbar + direct delete for demo.
+        // In production use a proper MudDialog for confirmation.
+        bool success = await Users.DeletePasskeyAsync(credentialId);
+        if (success)
+        {
+            await LoadPasskeys();
+        }
     }
 }

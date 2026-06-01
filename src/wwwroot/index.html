@@ -23,6 +23,34 @@
 
     <script type="importmap"></script>
 
+    <!-- ===================================================== -->
+    <!-- Google Maps JavaScript API - Recommended static load  -->
+    <!-- Using async + defer + loading=async (non-blocking)    -->
+    <!-- This is Google's recommended approach for best perf.  -->
+    <!-- The script starts loading very early in page lifecycle. -->
+    <!--                                                       -->
+    <!-- The shared loader (js/google-maps-loader.js) is now a   -->
+    <!-- thin promise wrapper — it no longer injects the script. -->
+    <!-- ===================================================== -->
+    <script>
+      // Global callback for the Maps API (must be defined before the script loads)
+      window.__googleMapsInit = function () {
+        window.__googleMapsLoaded = true;
+
+        // Notify the shared loader module (if it has already been imported)
+        if (window.__resolveGoogleMapsLoad) {
+          try { window.__resolveGoogleMapsLoad(); } catch (e) { }
+          window.__resolveGoogleMapsLoad = null;
+          window.__rejectGoogleMapsLoad = null;
+        }
+      };
+    </script>
+    <script
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDRaPp2QmC2QO47AypZnI8L4tLRuDWqd70&libraries=marker&loading=async&callback=__googleMapsInit&v=weekly"
+      async
+      defer>
+    </script>
+
     <!-- Site Scripts -->
     <script src="js/site.js" defer></script>
 </head>

@@ -1,86 +1,245 @@
 ﻿@page "/trailers"
+@using OutsourceTracker.BusinessUnit.Accounts
+@using OutsourceTracker.BusinessUnit.Zones
 @using OutsourceTracker.Equipment
 @using OutsourceTracker.Equipment.Trailers
+@using OutsourceTracker.Pages.Dialogs
+@using OutsourceTracker.Services.BusinessUnit.Accounts
 @using OutsourceTracker.Services.Equipment
+@using OutsourceTracker.Services.Zones
 @inject IEquipmentService<TrailerModel> Trailers
+@inject IAccountService Accounts
+@inject IZoneService Zones
 @inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 pb-4"
-              Style="height: calc(100vh - 64px); display: flex; flex-direction: column;">
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 pb-4 flex-grow-1 d-flex flex-column" Style="overflow: hidden;">
     
-    <div class="d-flex justify-space-between align-center mb-4">
+    <div class="d-flex justify-space-between align-center mb-4 flex-wrap gap-2">
         <MudText Typo="Typo.h4" GutterBottom="true">Trailers</MudText>
+        
         <MudButtonGroup Color="Color.Primary" Variant="Variant.Filled">
-            <MudIconButton Icon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog" />
-            <MudIconButton Icon="@Icons.Material.Filled.LibraryAdd" OnClick="OpenBulkAddDialog" />
-            <MudIconButton Icon="@Icons.Material.Filled.DeleteForever" Disabled="@(selectedTrailer == null)" OnClick="OpenDeleteDialog" />
-            <MudButton StartIcon="@Icons.Material.Filled.Map" IconColor="Color.Surface" Disabled="@(selectedTrailer == null)" OnClick="OpenSpotDialog">
+            <MudIconButton Icon="@MultiSelectButtonIcon()"
+                           OnClick="ToggleMultiSelect"
+                           Title="@(isMultiSelectMode ? "Exit Multi-Select" : "Enable Multi-Select")" />
+            
+            <MudIconButton Icon="@Icons.Material.Filled.Add"
+                           OnClick="OpenBulkAddDialog"
+                           Title="Bulk Add Trailers" />
+            
+            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                           Disabled="@(selectedTrailerIds.Count == 0)"
+                           OnClick="OpenEditDialog"
+                           Title="Edit Selected" />
+            
+            <MudIconButton Icon="@Icons.Material.Filled.DeleteForever"
+                           Disabled="@(selectedTrailerIds.Count == 0)"
+                           OnClick="OpenDeleteDialog"
+                           Title="Delete Selected" />
+            
+            <MudButton StartIcon="@Icons.Material.Filled.Map"
+                       IconColor="Color.Surface"
+                       Disabled="@(selectedTrailerIds.Count == 0)"
+                       OnClick="OpenSpotDialog">
                 Spot
             </MudButton>
         </MudButtonGroup>
     </div>
 
-    <MudGrid Spacing="4" Class="flex-grow-1">
-        <!-- Left: Trailer List - FIXED SCROLLING -->
-        <MudItem xs="12" md="5" Style="height: 100%;">
-            <MudCard Class="h-100 d-flex flex-column">
+    <!-- Global Filters Bar (applies to both list and map) -->
+    <MudPaper Class="pa-3 mb-4" Elevation="1">
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <!-- Search (now part of global filters) -->
+            <MudTextField @bind-Value="searchTerm"
+                          Placeholder="Search trailers..."
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          OnKeyUp="FilterTrailers"
+                          Style="max-width: 280px;"
+                          Variant="Variant.Outlined" Dense="true" />
+
+            <MudText Typo="Typo.subtitle2" Class="mr-1">Filters:</MudText>
+
+            <!-- Account Filter -->
+            <MudSelect T="Guid?" MultiSelection="true" 
+                       SelectedValues="selectedAccountFilter"
+                       SelectedValuesChanged="OnAccountFilterChanged"
+                       ToStringFunc="@(guid => GetAccountDisplayName(guid))"
+                       Placeholder="Account" Variant="Variant.Outlined" Dense="true" Style="min-width:160px;"
+                       SearchBox="true" SearchBoxPlaceholder="Search accounts..."
+                       Virtualize="true">
+                @foreach (var acc in allAccounts)
+                {
+                    <MudSelectItem T="Guid?" Value="@((Guid?)acc.Id)">@acc</MudSelectItem>
+                }
+            </MudSelect>
+
+            <!-- Zone Filter -->
+            <MudSelect T="string" MultiSelection="true" 
+                       SelectedValues="selectedZoneFilter"
+                       SelectedValuesChanged="OnZoneFilterChanged"
+                       Placeholder="Zone" Variant="Variant.Outlined" Dense="true" Style="min-width:140px;"
+                       SearchBox="true" SearchBoxPlaceholder="Search zones..."
+                       Virtualize="true">
+                @foreach (var zone in allZones)
+                {
+                    // Filter value uses ShortCode (matches what is typically stored in t.ZoneName for denormalized data)
+                    <MudSelectItem T="string" Value="@zone.ShortCode">@zone</MudSelectItem>
+                }
+            </MudSelect>
+
+            <!-- State Filter -->
+            <MudSelect T="EquipmentState?" MultiSelection="true" 
+                       SelectedValues="selectedStateFilter"
+                       SelectedValuesChanged="OnStateFilterChanged"
+                       Placeholder="State" Variant="Variant.Outlined" Dense="true" Style="min-width:120px;">
+                @foreach (var state in Enum.GetValues(typeof(EquipmentState)).Cast<EquipmentState>())
+                {
+                    <MudSelectItem T="EquipmentState?" Value="@((EquipmentState?)state)">@state</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="ClearAllFilters">Clear Filters</MudButton>
+
+            <!-- Sort controls -->
+            <MudSelect T="string" Value="@sortBy" ValueChanged="OnSortByChanged"
+                       Placeholder="Sort by" Variant="Variant.Outlined" Dense="true" Style="min-width: 145px;">
+                <MudSelectItem Value="@("LastSpotted")">Last Spotted</MudSelectItem>
+                <MudSelectItem Value="@("Name")">Name</MudSelectItem>
+                <MudSelectItem Value="@("State")">State</MudSelectItem>
+                <MudSelectItem Value="@("Account")">Account</MudSelectItem>
+                <MudSelectItem Value="@("Created")">Created</MudSelectItem>
+            </MudSelect>
+
+            <MudIconButton Icon="@(sortDescending ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)"
+                           Size="Size.Small"
+                           OnClick="ToggleSortDirection"
+                           Title="@(sortDescending ? "Descending (newest first)" : "Ascending")" />
+
+            @if (HasActiveFilters)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" OnClick="ClearAllFilters" Style="cursor: pointer;">
+                    Filters active
+                </MudChip>
+            }
+        </MudStack>
+    </MudPaper>
+
+    <MudGrid Spacing="4" Class="flex-grow-1" Style="min-height: 0; overflow: hidden;">
+        <!-- Trailer List -->
+        <MudItem xs="12" md="5" Class="d-flex" Style="height: 100%;">
+            <MudCard Class="flex-grow-1 d-flex flex-column" Style="overflow: hidden;">
                 <MudCardHeader>
                     <CardHeaderContent>
-                        <MudText Typo="Typo.h6">Trailer List (@filteredTrailers.Count)</MudText>
+                        <MudText Typo="Typo.h6">
+                            Trailer List (@filteredTrailers.Count)
+                            @if (isMultiSelectMode && selectedTrailerIds.Count > 0)
+                            {
+                                <span class="mud-color-text-secondary ml-2">(@selectedTrailerIds.Count selected)</span>
+                            }
+                        </MudText>
                     </CardHeaderContent>
                     <CardHeaderActions>
-                        <MudTextField @bind-Value="searchTerm"
-                                      Placeholder="Search trailers..."
-                                      Adornment="Adornment.Start"
-                                      AdornmentIcon="@Icons.Material.Filled.Search"
-                                      Immediate="true"
-                                      OnKeyUp="FilterTrailers"
-                                      Class="w-100" />
+                        @if (isMultiSelectMode)
+                        {
+                            <MudStack Row="true" Spacing="1" Class="ml-2">
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                           OnClick="SelectAllVisible"
+                                           Disabled="@(selectedTrailerIds.Count == filteredTrailers.Count)">
+                                    All
+                                </MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Secondary"
+                                           OnClick="ClearSelection"
+                                           Disabled="@(selectedTrailerIds.Count == 0)">
+                                    Clear
+                                </MudButton>
+                            </MudStack>
+                        }
                     </CardHeaderActions>
                 </MudCardHeader>
-                
-                <MudCardContent Class="flex-grow-1 pa-0" Style="min-height: 0; display: flex; flex-direction: column;">
-                    <!-- This wrapper is critical for scrolling -->
-                    <div style="flex: 1 1 auto; overflow-y: auto; min-height: 0;">
-                        <MudList T="TrailerModel" Dense="true">
-                            @foreach (var trailer in filteredTrailers)
-                            {
-                                <MudListItem OnClick="() => SelectTrailer(trailer)" Class="py-3">
-                                    <div class="d-flex flex-column w-100">
-                                        <div class="d-flex justify-space-between align-center">
-                                            <MudText Typo="Typo.body1"><strong>@trailer.FullName</strong></MudText>
-                                            <MudChipSet SelectionMode="SelectionMode.SingleSelection" ReadOnly="true" Variant="Variant.Outlined" Size="Size.Small">
+
+                <MudCardContent Class="flex-grow-1 pa-0 overflow-auto" Style="min-height: 0;">
+                    <MudList T="TrailerModel" Dense="true">
+                        @foreach (var trailer in filteredTrailers)
+                        {
+                            bool isSelected = selectedTrailerIds.Contains(trailer.Id);
+                            
+                            <MudListItem OnClick="() => SelectTrailer(trailer)"
+                                         Class='@(isSelected ? "mud-theme-primary" : "")'
+                                         Style='@(isSelected ? "background-color: var(--mud-palette-primary-light);" : "")'>
+                                <div class="d-flex align-center gap-3 w-100">
+                                    <div class="d-flex flex-column flex-grow-1 gap-1" style="min-width: 0;">
+                                        <!-- Top row: Trailer ID + Type/State -->
+                                        <div class="d-flex justify-space-between align-center gap-2">
+                                            <MudText Typo="Typo.body1"
+                                                     Class="font-weight-bold text-truncate"
+                                                     Style="max-width: 60%;">
+                                                @trailer.FullName
+                                            </MudText>
+                                            
+                                            <MudChipSet SelectionMode="SelectionMode.SingleSelection"
+                                                        ReadOnly="true"
+                                                        Variant="Variant.Outlined"
+                                                        Size="Size.Small">
                                                 <MudChip Color="Color.Dark">@trailer.Type</MudChip>
                                                 <MudChip Color="@GetStatusColor(trailer.State)">@trailer.State</MudChip>
                                             </MudChipSet>
                                         </div>
 
-                                        <MudText Typo="Typo.body2" Color="Color.Primary">Location: @GetLocationString(trailer)</MudText>
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                            Last updated: @trailer.CreatedOn.ToLocalTime().ToString("g")
+                                        <!-- Account -->
+                                        <MudText Typo="Typo.body2" 
+                                                 Color="@(isSelected ? Color.Default : Color.Secondary)"
+                                                 Class="text-truncate">
+                                            <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Small" Class="mr-1" />
+                                            @GetAccountDisplay(trailer)
                                         </MudText>
+
+                                        <!-- Location -->
+                                        <MudText Typo="Typo.body2" 
+                                                 Color="@(isSelected ? Color.Default : Color.Primary)" 
+                                                 Class="text-truncate">
+                                            <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-1" />
+                                            @GetLocationString(trailer)
+                                        </MudText>
+
+                                        <!-- Located By + Date -->
+                                        @if (!string.IsNullOrWhiteSpace(trailer.LocatedByName) || trailer.LocatedDate.HasValue)
+                                        {
+                                            <MudText Typo="Typo.caption" 
+                                                     Color="@(isSelected ? Color.Default : Color.Secondary)">
+                                                <MudIcon Icon="@Icons.Material.Filled.PersonPin" Size="Size.Small" Class="mr-1" />
+                                                @if (!string.IsNullOrWhiteSpace(trailer.LocatedByName))
+                                                {
+                                                    <span>@trailer.LocatedByName</span>
+                                                }
+                                                @if (trailer.LocatedDate.HasValue)
+                                                {
+                                                    <span> • @trailer.LocatedDate?.ToLocalTime().ToString("g")</span>
+                                                }
+                                            </MudText>
+                                        }
                                     </div>
-                                </MudListItem>
-                            }
-                        </MudList>
-                    </div>
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
                 </MudCardContent>
             </MudCard>
         </MudItem>
 
-        <!-- Right: Map -->
-        <MudItem xs="12" md="7" Style="height: 100%;">
-            <MudCard Class="h-100 d-flex flex-column">
+        <!-- Map -->
+        <MudItem xs="12" md="7" Class="d-none d-sm-flex" Style="height: 100%;">
+            <MudCard Class="flex-grow-1 d-flex flex-column" Style="overflow: hidden;">
                 <MudCardHeader>
                     <CardHeaderContent>
                         <MudText Typo="Typo.h6">Live Location Map</MudText>
                     </CardHeaderContent>
                 </MudCardHeader>
-                <MudCardContent Class="flex-grow-1 pa-0 position-relative">
-                    <div id="googleMap"
-                         style="width: 100%; height: 100%; background: #e0e0e0; border: 1px solid #ccc;
-                        display: flex; align-items: center; justify-content: center;">
-                        <div style="text-align: center; color: #666;">
+                <MudCardContent Class="flex-grow-1 pa-0 position-relative overflow-hidden">
+                    <div id="googleMap" style="width: 100%; height: 100%; background: #e0e0e0;">
+                        <div style="text-align: center; color: #666; padding: 2rem; height: 100%; display: flex; flex-direction: column; justify-content: center;">
                             <MudIcon Icon="@Icons.Material.Filled.Map" Size="Size.Large" />
                             <p class="mt-2">Google Maps will load here</p>
                             <p class="caption">Markers for all trailers will appear on the map</p>
@@ -96,19 +255,73 @@
     private List<TrailerModel> allTrailers = new();
     private List<TrailerModel> filteredTrailers = new();
     private string? searchTerm;
-    private TrailerModel? selectedTrailer;
+    private HashSet<Guid> selectedTrailerIds = new();
+    private bool isMultiSelectMode = false;
+
+    private List<OrganizationalAccount> allAccounts = new();
+    private Dictionary<Guid, OrganizationalAccount> accountLookup = new();
+
+    private IJSObjectReference? mapModule;
+    private bool mapInitialized = false;
+
+    // Map Filters (now global to the page)
+    private HashSet<Guid?> selectedAccountFilter = new();
+    private HashSet<string?> selectedZoneFilter = new();
+    private HashSet<EquipmentState?> selectedStateFilter = new();
+
+    // Sort options
+    private string sortBy = "LastSpotted";
+    private bool sortDescending = true;
+
+    private const string FilterStorageKey = "trailerListFilters";
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadAccounts();
+        await LoadZones();
         await LoadTrailers();
+        await LoadFiltersFromStorage();
+    }
+
+    private async Task LoadAccounts()
+    {
+        try
+        {
+            allAccounts = await Accounts.GetAllAsync();
+            accountLookup = allAccounts.ToDictionary(a => a.Id);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading accounts for trailer list: {ex.Message}");
+        }
+    }
+
+    private List<Zone> allZones = new();
+
+    private async Task LoadZones()
+    {
+        try
+        {
+            allZones = await Zones.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading zones for trailer map: {ex.Message}");
+        }
     }
 
     private async Task LoadTrailers()
     {
         try
         {
-            allTrailers = await Trailers.ListAsync().ToListAsync();
-            filteredTrailers = allTrailers.ToList();
+            allTrailers = await Trailers.List().ToListAsync();
+
+            // Prune any selected IDs that no longer exist
+            var currentIds = new HashSet<Guid>(allTrailers.Select(t => t.Id));
+            selectedTrailerIds.RemoveWhere(id => !currentIds.Contains(id));
+
+            // Apply current filters (text search + map filters) to the list and map
+            ApplyFilters();
         }
         catch (Exception ex)
         {
@@ -119,14 +332,33 @@
     private async Task OnTrailerCreated(TrailerModel trailer)
     {
         allTrailers.Add(trailer);
-        FilterTrailers();
+        ApplyFilters();
         StateHasChanged();
     }
 
-    private void SelectTrailer(TrailerModel trailer)
+    private async Task SelectTrailer(TrailerModel trailer)
     {
-        selectedTrailer = trailer;
-        StateHasChanged();
+        if (trailer?.Id == Guid.Empty) return;
+
+        if (isMultiSelectMode)
+        {
+            if (!selectedTrailerIds.Add(trailer.Id))
+            {
+                selectedTrailerIds.Remove(trailer.Id);
+            }
+        }
+        else
+        {
+            selectedTrailerIds.Clear();
+            selectedTrailerIds.Add(trailer.Id);
+            StateHasChanged();
+
+            // Focus the selected trailer on the map
+            if (mapModule != null && mapInitialized && trailer.Location.HasValue)
+            {
+                await mapModule.InvokeVoidAsync("focusOnTrailer", trailer.Id);
+            }
+        }
     }
 
     private Color GetStatusColor(EquipmentState status) => status switch
@@ -137,23 +369,100 @@
         _ => Color.Default
     };
 
-    private void FilterTrailers()
+    private void ApplyFilters()
     {
-        if (string.IsNullOrWhiteSpace(searchTerm))
+        var query = allTrailers.AsEnumerable();
+
+        // Text search filter
+        if (!string.IsNullOrWhiteSpace(searchTerm))
         {
-            filteredTrailers = allTrailers.ToList();
+            query = query.Where(t => t.FullName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
         }
-        else
+
+        // Global map filters (now applied to the main list as well)
+        if (selectedAccountFilter.Count > 0)
         {
-            filteredTrailers = allTrailers
-                .Where(t => t.FullName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            query = query.Where(t => t.AccountId.HasValue && selectedAccountFilter.Contains(t.AccountId));
+        }
+
+        if (selectedZoneFilter.Count > 0)
+        {
+            // Match against denormalized ZoneName (often ShortCode or FullName) or by ZoneId using the master data
+            query = query.Where(t =>
+                selectedZoneFilter.Contains(t.ZoneName) ||
+                (t.ZoneId.HasValue && allZones.Any(z =>
+                    (selectedZoneFilter.Contains(z.ShortCode) || selectedZoneFilter.Contains(z.FullName)) &&
+                    z.Id == t.ZoneId.Value))
+            );
+        }
+
+        if (selectedStateFilter.Count > 0)
+        {
+            query = query.Where(t => selectedStateFilter.Contains(t.State));
+        }
+
+        filteredTrailers = query.ToList();
+
+        // Apply current sort order (default: Last Spotted descending)
+        ApplySort();
+
+        StateHasChanged();
+
+        // Keep the map in sync
+        _ = RenderTrailersOnMap();
+    }
+
+    private void ApplySort()
+    {
+        if (filteredTrailers == null || filteredTrailers.Count == 0)
+            return;
+
+        switch (sortBy)
+        {
+            case "LastSpotted":
+                // Most recently spotted first by default
+                filteredTrailers = sortDescending
+                    ? filteredTrailers.OrderByDescending(t => t.LocatedDate ?? DateTimeOffset.MinValue).ToList()
+                    : filteredTrailers.OrderBy(t => t.LocatedDate ?? DateTimeOffset.MaxValue).ToList();
+                break;
+
+            case "Name":
+                filteredTrailers = sortDescending
+                    ? filteredTrailers.OrderByDescending(t => t.FullName, StringComparer.OrdinalIgnoreCase).ToList()
+                    : filteredTrailers.OrderBy(t => t.FullName, StringComparer.OrdinalIgnoreCase).ToList();
+                break;
+
+            case "State":
+                filteredTrailers = sortDescending
+                    ? filteredTrailers.OrderByDescending(t => t.State.ToString()).ToList()
+                    : filteredTrailers.OrderBy(t => t.State.ToString()).ToList();
+                break;
+
+            case "Account":
+                filteredTrailers = sortDescending
+                    ? filteredTrailers.OrderByDescending(t => GetAccountDisplay(t), StringComparer.OrdinalIgnoreCase).ToList()
+                    : filteredTrailers.OrderBy(t => GetAccountDisplay(t), StringComparer.OrdinalIgnoreCase).ToList();
+                break;
+
+            case "Created":
+                filteredTrailers = sortDescending
+                    ? filteredTrailers.OrderByDescending(t => t.CreatedOn).ToList()
+                    : filteredTrailers.OrderBy(t => t.CreatedOn).ToList();
+                break;
+
+            default:
+                // Safe fallback
+                filteredTrailers = filteredTrailers.OrderByDescending(t => t.LocatedDate ?? DateTimeOffset.MinValue).ToList();
+                break;
         }
     }
 
+    // Keep for backward compatibility with existing calls
+    private void FilterTrailers() => ApplyFilters();
+
     private string GetLocationString(TrailerModel trailer)
     {
-        if (trailer.ZoneName != null) return trailer.ZoneName;
+        if (!string.IsNullOrEmpty(trailer.ZoneName)) return trailer.ZoneName;
         if (trailer.Location.HasValue)
         {
             string coords = $"{trailer.Location.Value.X:F4}, {trailer.Location.Value.Y:F4}";
@@ -162,14 +471,66 @@
         return "Unknown";
     }
 
-    private async Task OpenCreateDialog()
+    private string GetAccountDisplay(TrailerModel trailer)
     {
-        var instance = await DialogService.ShowAsync<CreateTrailerDialog>("Create New Trailer");
-        var result = await instance.GetReturnValueAsync<TrailerModel>();
-        if (result != null)
+        if (trailer.AccountId.HasValue && accountLookup.TryGetValue(trailer.AccountId.Value, out var account))
         {
-            await OnTrailerCreated(result);
+            return account.ToString();
         }
+
+        // Fallback to any denormalized data that may come from backend in the future
+        if (!string.IsNullOrWhiteSpace(trailer.AccountShortCode))
+        {
+            return string.IsNullOrWhiteSpace(trailer.AccountName) 
+                ? trailer.AccountShortCode 
+                : $"{trailer.AccountShortCode} - {trailer.AccountName}";
+        }
+
+        return "Unassigned";
+    }
+
+    private string GetAccountDisplayName(Guid? guid)
+    {
+        if (!guid.HasValue || guid.Value == Guid.Empty)
+            return string.Empty;
+
+        if (accountLookup.TryGetValue(guid.Value, out var acc))
+        {
+            return acc.ToString();
+        }
+
+        return guid.Value.ToString(); // fallback (should rarely happen)
+    }
+
+    private async Task ToggleMultiSelect()
+    {
+        isMultiSelectMode = !isMultiSelectMode;
+
+        if (!isMultiSelectMode)
+        {
+            selectedTrailerIds.Clear();
+        }
+
+        StateHasChanged();
+    }
+
+    private string MultiSelectButtonIcon() =>
+        isMultiSelectMode ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank;
+
+    private void SelectAllVisible()
+    {
+        foreach (var trailer in filteredTrailers)
+        {
+            if (trailer.Id != Guid.Empty)
+                selectedTrailerIds.Add(trailer.Id);
+        }
+        StateHasChanged();
+    }
+
+    private void ClearSelection()
+    {
+        selectedTrailerIds.Clear();
+        StateHasChanged();
     }
 
     private async Task OpenBulkAddDialog()
@@ -185,31 +546,294 @@
         }
     }
 
+    private async Task OpenEditDialog()
+    {
+        if (selectedTrailerIds.Count == 0) return;
+
+        var selectedTrailers = allTrailers
+            .Where(t => selectedTrailerIds.Contains(t.Id))
+            .ToList();
+
+        var parameters = new DialogParameters<EditTrailerDialog>
+        {
+            { x => x.Trailers, selectedTrailers }
+        };
+
+        var instance = await DialogService.ShowAsync<EditTrailerDialog>("Edit Trailers", parameters);
+        var result = await instance.GetReturnValueAsync<List<TrailerModel>>();
+
+        if (result != null && result.Count > 0)
+        {
+            // After editing (especially after DB resets or account changes),
+            // it's safer to do a full reload to avoid stale AccountId / ZoneId in memory.
+            await LoadTrailers();
+        }
+        else
+        {
+            // Fallback: at least refresh the list
+            ApplyFilters();
+            StateHasChanged();
+        }
+    }
+
     private async Task OpenDeleteDialog()
     {
-        if (selectedTrailer == null) return;
+        if (selectedTrailerIds.Count == 0) return;
 
+        var selectedCount = selectedTrailerIds.Count;
         var parameters = new DialogParameters<ConfirmationDialog>
         {
-            { x => x.ContentText, $"Are you sure you want to delete trailer {selectedTrailer!.FullName}? This process cannot be undone." },
+            { x => x.ContentText, $"Are you sure you want to delete {selectedCount} trailer(s)? This action cannot be undone." },
             { x => x.ButtonText, "Delete" },
             { x => x.Color, Color.Error }
         };
 
-        var instance = await DialogService.ShowAsync<ConfirmationDialog>("Delete Trailer?", parameters);
+        var instance = await DialogService.ShowAsync<ConfirmationDialog>("Delete Trailers?", parameters);
         var result = await instance.Result;
 
         if (result?.Canceled == true) return;
 
-        await Trailers.DeleteAsync(selectedTrailer.Id);
-        allTrailers.Remove(selectedTrailer);
-        filteredTrailers.Remove(selectedTrailer);
-        selectedTrailer = null;
+        var idsToDelete = selectedTrailerIds.ToList();
+
+        try
+        {
+            var bulkResult = await Trailers.DeleteManyAsync(idsToDelete);
+
+            int deleted = bulkResult?.SuccessfulIds?.Length ?? 0;
+            int failed = bulkResult?.Failed?.Count ?? 0;
+
+            if (deleted > 0)
+            {
+                Snackbar.Add($"Deleted {deleted} trailer(s).", Severity.Success);
+            }
+            if (failed > 0)
+            {
+                Snackbar.Add($"{failed} trailer(s) could not be deleted.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Bulk delete failed: {ex.Message}", Severity.Error);
+        }
+
+        // Remove from local lists (optimistic for successes; server is source of truth on next load)
+        allTrailers.RemoveAll(t => selectedTrailerIds.Contains(t.Id));
+        filteredTrailers.RemoveAll(t => selectedTrailerIds.Contains(t.Id));
+        selectedTrailerIds.Clear();
+
         StateHasChanged();
     }
 
     private async Task OpenSpotDialog()
     {
-        // TODO: Implement map logic
+        if (selectedTrailerIds.Count == 0) return;
+
+        var selected = allTrailers.Where(t => selectedTrailerIds.Contains(t.Id)).ToList();
+        if (selected.Count == 0) return;
+
+        var parameters = new DialogParameters<LocationUpdateDialog>
+        {
+            { x => x.Trailers, selected }
+        };
+
+        var instance = await DialogService.ShowAsync<LocationUpdateDialog>("Spot Trailers", parameters);
+        var result = await instance.Result;
+
+        // Refresh after spotting (server may have updated locations)
+        if (!result.Canceled)
+        {
+            await LoadTrailers();
+            // Re-select any that still exist after refresh
+            var refreshedIds = new HashSet<Guid>(filteredTrailers.Select(t => t.Id));
+            selectedTrailerIds.RemoveWhere(id => !refreshedIds.Contains(id));
+            StateHasChanged();
+        }
+    }
+
+    // ==================== Google Maps Integration ====================
+
+    private async Task RenderTrailersOnMap()
+    {
+        if (filteredTrailers == null || filteredTrailers.Count == 0) return;
+
+        try
+        {
+            if (mapModule == null)
+            {
+                mapModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/trailer-map.js");
+            }
+
+            if (!mapInitialized)
+            {
+                await mapModule.InvokeVoidAsync("initMap", "googleMap", 39.8283, -98.5795, 4, DotNetObjectReference.Create(this));
+                mapInitialized = true;
+            }
+
+            // Use the globally filtered list (respects both text search and map filters)
+            var markersData = filteredTrailers
+                .Where(t => t.Location.HasValue)
+                .Select(t => new
+                {
+                    id = t.Id,
+                    fullName = t.FullName,
+                    state = t.State.ToString(),
+                    type = t.Type.ToString(),
+                    accountShortCode = t.AccountShortCode,
+                    accountName = t.AccountName,
+                    zoneName = t.ZoneName,
+                    locatedByName = t.LocatedByName,
+                    locatedDate = t.LocatedDate,
+                    location = new { x = t.Location!.Value.X, y = t.Location!.Value.Y }
+                })
+                .ToList();
+
+            await mapModule.InvokeVoidAsync("addTrailerMarkers", markersData);
+
+            // Render zone borders with names (if zones are loaded)
+            if (allZones.Any())
+            {
+                var zonesData = allZones
+                    .Where(z => z.Boundry != null && z.Boundry.VertexCount >= 3)
+                    .Select(z => new
+                    {
+                        id = z.Id,
+                        shortCode = z.ShortCode,
+                        fullName = z.FullName,
+                        boundryPoints = z.Boundry.Points.ToArray().Select(p => new { x = p.X, y = p.Y }).ToList()
+                    })
+                    .ToList();
+
+                await mapModule.InvokeVoidAsync("addZonePolygons", zonesData);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error rendering trailers on map: {ex.Message}");
+        }
+    }
+
+
+
+    private bool HasActiveFilters =>
+        selectedAccountFilter.Count > 0 ||
+        selectedZoneFilter.Count > 0 ||
+        selectedStateFilter.Count > 0;
+
+    private async Task ClearAllFilters()
+    {
+        selectedAccountFilter.Clear();
+        selectedZoneFilter.Clear();
+        selectedStateFilter.Clear();
+        ApplyFilters();
+        await SaveFiltersToStorage();
+    }
+
+    private async Task OnAccountFilterChanged(IEnumerable<Guid?> values)
+    {
+        selectedAccountFilter = new HashSet<Guid?>(values);
+        ApplyFilters();
+        await SaveFiltersToStorage();
+    }
+
+    private async Task OnZoneFilterChanged(IEnumerable<string> values)
+    {
+        selectedZoneFilter = new HashSet<string?>(values);
+        ApplyFilters();
+        await SaveFiltersToStorage();
+    }
+
+    private async Task OnStateFilterChanged(IEnumerable<EquipmentState?> values)
+    {
+        selectedStateFilter = new HashSet<EquipmentState?>(values);
+        ApplyFilters();
+        await SaveFiltersToStorage();
+    }
+
+    private async Task OnSortByChanged(string newSortBy)
+    {
+        sortBy = newSortBy;
+        ApplyFilters();
+        await SaveFiltersToStorage();
+    }
+
+    private async Task ToggleSortDirection()
+    {
+        sortDescending = !sortDescending;
+        ApplyFilters();
+        await SaveFiltersToStorage();
+    }
+
+    [JSInvokable]
+    public async Task OnMarkerClicked(Guid trailerId)
+    {
+        var trailer = allTrailers.FirstOrDefault(t => t.Id == trailerId);
+        if (trailer != null)
+        {
+            // Select the trailer when its marker is clicked
+            selectedTrailerIds.Clear();
+            selectedTrailerIds.Add(trailerId);
+            StateHasChanged();
+        }
+    }
+
+    // ==================== Filter Persistence ====================
+
+    private async Task LoadFiltersFromStorage()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string>("localStorage.getItem", FilterStorageKey);
+            if (string.IsNullOrWhiteSpace(json)) return;
+
+            var data = System.Text.Json.JsonSerializer.Deserialize<FilterStorage>(json);
+            if (data == null) return;
+
+            selectedAccountFilter = new HashSet<Guid?>(data.Accounts ?? new List<Guid?>());
+            selectedZoneFilter = new HashSet<string?>(data.Zones ?? new List<string?>());
+            selectedStateFilter = new HashSet<EquipmentState?>(data.States?.Select(s => (EquipmentState?)s) ?? new List<EquipmentState?>());
+
+            if (!string.IsNullOrWhiteSpace(data.SortBy))
+                sortBy = data.SortBy;
+            sortDescending = data.SortDescending;
+
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load filter state: {ex.Message}");
+        }
+    }
+
+    private async Task SaveFiltersToStorage()
+    {
+        try
+        {
+            var data = new FilterStorage
+            {
+                Accounts = selectedAccountFilter.ToList(),
+                Zones = selectedZoneFilter.ToList(),
+                States = selectedStateFilter.Where(s => s.HasValue).Select(s => (int)s.Value).ToList(),
+                SortBy = sortBy,
+                SortDescending = sortDescending
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(data);
+            await JS.InvokeVoidAsync("localStorage.setItem", FilterStorageKey, json);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to save filter state: {ex.Message}");
+        }
+    }
+
+    private record FilterStorage
+    {
+        public List<Guid?> Accounts { get; set; } = new();
+        public List<string?> Zones { get; set; } = new();
+        public List<int> States { get; set; } = new();
+
+        // Sort preferences
+        public string? SortBy { get; set; }
+        public bool SortDescending { get; set; } = true;
     }
 }

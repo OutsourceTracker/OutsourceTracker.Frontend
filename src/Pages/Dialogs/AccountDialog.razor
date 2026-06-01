@@ -1,0 +1,150 @@
+﻿@using OutsourceTracker.BusinessUnit.Accounts
+@using OutsourceTracker.BusinessUnit.Divisions
+@using OutsourceTracker.Services.BusinessUnit.Accounts
+@using OutsourceTracker.Services.BusinessUnit.Divisions
+@inject IAccountService Accounts
+@inject IOrganizationalUnitService OrganizationalUnits
+@inject ISnackbar Snackbar
+
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true">
+    <DialogContent>
+        <MudText Typo="Typo.h6" GutterBottom="true">
+            @(IsEdit ? "Edit Account" : "Create New Account")
+        </MudText>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12" sm="6">
+                <MudTextField Label="Short Code" @bind-Value="Model.ShortCode" Required="true"
+                              MaxLength="10" HelperText="Unique short identifier" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField Label="Name" @bind-Value="Model.Name" Required="true"
+                              MaxLength="100" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudSelect T="Guid" Label="Organizational Unit" @bind-Value="Model.OUID" Required="true"
+                           ToStringFunc="@(id => AvailableOUs.FirstOrDefault(o => o.Id == id)?.ToString() ?? (id == Guid.Empty || id == default ? string.Empty : id.ToString()))">
+                    @foreach (var ou in AvailableOUs)
+                    {
+                        <MudSelectItem Value="@ou.Id">@ou</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" sm="6">
+                <MudTextField Label="Cost Center" @bind-Value="Model.CostCenter"
+                              MaxLength="6" HelperText="6 digits (optional)" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField Label="Group Email" @bind-Value="Model.GroupEmail"
+                              InputType="InputType.Email" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField Label="Address" @bind-Value="Model.Address" Lines="2" />
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="Save" Disabled="@IsSaving">
+            @if (IsSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>@(IsEdit ? "Save Changes" : "Create Account")</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public OrganizationalAccount? ExistingAccount { get; set; }
+
+    private AccountCreateModel Model { get; set; } = new();
+    private List<OrganizationalUnit> AvailableOUs { get; set; } = new();
+    private bool IsEdit => ExistingAccount != null;
+    private bool IsSaving = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadOrganizationalUnits();
+
+        if (ExistingAccount != null)
+        {
+            Model = new AccountCreateModel
+            {
+                ShortCode = ExistingAccount.ShortCode,
+                Name = ExistingAccount.Name,
+                CostCenter = ExistingAccount.CostCenter,
+                GroupEmail = ExistingAccount.GroupEmail,
+                Address = ExistingAccount.Address,
+                OUID = ExistingAccount.OUID
+            };
+        }
+    }
+
+    private async Task LoadOrganizationalUnits()
+    {
+        try
+        {
+            AvailableOUs = await OrganizationalUnits.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load organizational units: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(Model.ShortCode) || string.IsNullOrWhiteSpace(Model.Name) || Model.OUID == Guid.Empty)
+        {
+            Snackbar.Add("Short Code, Name, and Organizational Unit are required.", Severity.Warning);
+            return;
+        }
+
+        IsSaving = true;
+
+        try
+        {
+            if (IsEdit && ExistingAccount != null)
+            {
+                var updated = await Accounts.UpdateAsync(ExistingAccount.Id, Model);
+                if (updated != null)
+                {
+                    Snackbar.Add("Account updated successfully.", Severity.Success);
+                    MudDialog.Close(updated);
+                }
+                else
+                {
+                    Snackbar.Add("Failed to update account.", Severity.Error);
+                }
+            }
+            else
+            {
+                var created = await Accounts.CreateAsync(Model);
+                Snackbar.Add("Account created successfully.", Severity.Success);
+                MudDialog.Close(true); // Signal that list should refresh
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Close();
+}

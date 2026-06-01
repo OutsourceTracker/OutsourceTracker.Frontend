@@ -1,0 +1,146 @@
+﻿@page "/accounts"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using OutsourceTracker.BusinessUnit.Accounts
+@using OutsourceTracker.Pages.Dialogs
+@using OutsourceTracker.Services.BusinessUnit.Accounts
+@inject IAccountService Accounts
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 pb-4">
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h4">Accounts</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreateDialog">
+            New Account
+        </MudButton>
+    </div>
+
+    <MudTable Items="@accounts" Hover="true" Dense="true" Filter="FilterAccounts"
+              SortLabel="Sort By" Loading="@isLoading">
+        <ToolBarContent>
+            <MudTextField @bind-Value="searchString" Placeholder="Search accounts..."
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true" Class="mt-0" />
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<OrganizationalAccount, object>(x => x.ShortCode)">Short Code</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<OrganizationalAccount, object>(x => x.Name)">Name</MudTableSortLabel></MudTh>
+            <MudTh>Cost Center</MudTh>
+            <MudTh>Email</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Short Code">@context.ShortCode</MudTd>
+            <MudTd DataLabel="Name">@context.Name</MudTd>
+            <MudTd DataLabel="Cost Center">@context.CostCenter</MudTd>
+            <MudTd DataLabel="Email">@context.GroupEmail</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="() => OpenEditDialog(context)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="() => ConfirmDelete(context)" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private List<OrganizationalAccount> accounts = new();
+    private string searchString = "";
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccounts();
+    }
+
+    private async Task LoadAccounts()
+    {
+        isLoading = true;
+        try
+        {
+            accounts = await Accounts.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load accounts: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private bool FilterAccounts(OrganizationalAccount account)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+
+        var term = searchString.Trim();
+        return account.ShortCode.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+               account.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+               (account.CostCenter?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+               (account.GroupEmail?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters<AccountDialog>();
+        var dialog = await DialogService.ShowAsync<AccountDialog>("Create Account", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadAccounts(); // Refresh
+        }
+    }
+
+    private async Task OpenEditDialog(OrganizationalAccount account)
+    {
+        var parameters = new DialogParameters<AccountDialog>
+        {
+            { x => x.ExistingAccount, account }
+        };
+
+        var dialog = await DialogService.ShowAsync<AccountDialog>("Edit Account", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadAccounts();
+        }
+    }
+
+    private async Task ConfirmDelete(OrganizationalAccount account)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, $"Delete account '{account.ShortCode} - {account.Name}'? This action cannot be undone." },
+            { x => x.ButtonText, "Delete" },
+            { x => x.Color, Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete Account?", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            bool success = await Accounts.DeleteAsync(account.Id);
+            if (success)
+            {
+                Snackbar.Add("Account deleted.", Severity.Success);
+                await LoadAccounts();
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete account.", Severity.Error);
+            }
+        }
+    }
+}

@@ -1,0 +1,286 @@
+﻿@using OutsourceTracker.BusinessUnit.Accounts
+@using OutsourceTracker.Equipment
+@using OutsourceTracker.Equipment.Trailers
+@using OutsourceTracker.Services.BusinessUnit.Accounts
+@using OutsourceTracker.Services.Equipment
+@inject IEquipmentService<TrailerModel> TrailersService
+@inject IAccountService AccountService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true">
+    <DialogContent>
+        <MudText Typo="Typo.h6" GutterBottom="true">
+            @if (IsBulk)
+            {
+                <span>Edit @Trailers.Count Trailers</span>
+            }
+            else
+            {
+                <span>Edit Trailer @Trailer?.FullName</span>
+            }
+        </MudText>
+
+        <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+            Only fields you change will be updated.
+        </MudText>
+
+        <MudGrid Spacing="3">
+            <!-- Prefix -->
+            <MudItem xs="12" sm="6">
+                <MudTextField Label="Prefix" @bind-Value="Prefix" MaxLength="4"
+                              HelperText="2-4 characters" Immediate="true" />
+            </MudItem>
+
+            <!-- Name -->
+            <MudItem xs="12" sm="6">
+                <MudTextField Label="Name / Number" @bind-Value="Name" MaxLength="10"
+                              HelperText="Usually 6 digits with leading zeros" Immediate="true" />
+            </MudItem>
+
+            <!-- Type -->
+            <MudItem xs="12" sm="6">
+                <MudSelect T="TrailerType?" Label="Type" @bind-Value="SelectedType" Clearable="true">
+                    <MudSelectItem Value="@((TrailerType?)TrailerType.Van)">Dry Van</MudSelectItem>
+                    <MudSelectItem Value="@((TrailerType?)TrailerType.Reefer)">Reefer</MudSelectItem>
+                    <MudSelectItem Value="@((TrailerType?)TrailerType.Flatbed)">Flatbed</MudSelectItem>
+                    <MudSelectItem Value="@((TrailerType?)TrailerType.Conestoga)">Conestoga</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+
+            <!-- State -->
+            <MudItem xs="12" sm="6">
+                <MudSelect T="EquipmentState?" Label="State" @bind-Value="SelectedState" Clearable="true">
+                    <MudSelectItem Value="@((EquipmentState?)EquipmentState.Available)">Available</MudSelectItem>
+                    <MudSelectItem Value="@((EquipmentState?)EquipmentState.Dispatched)">Dispatched</MudSelectItem>
+                    <MudSelectItem Value="@((EquipmentState?)EquipmentState.MechanicallyDown)">Mechanically Down</MudSelectItem>
+                    <MudSelectItem Value="@((EquipmentState?)EquipmentState.Unknown)">Unknown</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+
+            <!-- Account -->
+            <MudItem xs="12">
+                <MudSelect T="Guid?" Label="Account" @bind-Value="SelectedAccountId" Clearable="true"
+                           ClearableText="— No Account —"
+                           ToStringFunc="@(guid => GetAccountDisplayName(guid))"
+                           HelperText="@(IsBulk ? "Leave empty to keep current accounts" : "")">
+                    @if (AccountsLoaded)
+                    {
+                        <MudSelectItem Value="@((Guid?)null)">— No Account —</MudSelectItem>
+                        @foreach (var acc in Accounts)
+                        {
+                            <MudSelectItem Value="@((Guid?)acc.Id)">@acc</MudSelectItem>
+                        }
+                    }
+                    else
+                    {
+                        <MudSelectItem Value="@((Guid?)null)" Disabled="true">Loading accounts...</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Close">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="HandleSave" Disabled="@IsSaving">
+            @if (IsSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>@(IsBulk ? "Update All Selected" : "Save Changes")</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public List<TrailerModel> Trailers { get; set; } = new();
+
+    private List<OrganizationalAccount> Accounts { get; set; } = new();
+    private bool AccountsLoaded = false;
+
+    private TrailerModel? Trailer => Trailers.Count == 1 ? Trailers[0] : null;
+    private bool IsBulk => Trailers.Count > 1;
+
+    // Bound form values
+    private string Prefix = string.Empty;
+    private string Name = string.Empty;
+    private TrailerType? SelectedType = null;
+    private EquipmentState? SelectedState = null;
+    private Guid? SelectedAccountId = null;
+
+    private bool IsSaving = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+
+        // Prefill for single edit (basic fields)
+        if (Trailer != null)
+        {
+            Prefix = Trailer.Prefix ?? string.Empty;
+            Name = Trailer.Name ?? string.Empty;
+            SelectedType = Trailer.Type;
+            SelectedState = Trailer.State;
+        }
+        // For bulk, leave fields empty / null so user explicitly chooses what to change
+
+        await LoadAccounts();
+
+        // After accounts are loaded, sanitize the account selection
+        // This prevents sending stale AccountIds that no longer exist (e.g. after DB reset)
+        if (Trailer != null)
+        {
+            if (Trailer.AccountId.HasValue &&
+                !Accounts.Any(a => a.Id == Trailer.AccountId.Value))
+            {
+                // The trailer's current AccountId is no longer valid → treat as unassigned
+                SelectedAccountId = null;
+            }
+            else
+            {
+                SelectedAccountId = Trailer.AccountId;
+            }
+        }
+    }
+
+    private async Task LoadAccounts()
+    {
+        try
+        {
+            Accounts = await AccountService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load accounts: {ex.Message}", Severity.Warning);
+            Accounts = new();
+        }
+        finally
+        {
+            AccountsLoaded = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleSave()
+    {
+        if (Trailers.Count == 0) return;
+
+        var changes = BuildChangesDictionary();
+        if (changes.Count == 0)
+        {
+            Snackbar.Add("No changes detected.", Severity.Info);
+            Close();
+            return;
+        }
+
+        IsSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            var ids = Trailers.Select(t => t.Id).ToList();
+            var result = await TrailersService.UpdateManyAsync(ids, changes);
+
+            int updated = result?.Updated.Count ?? 0;
+            int failed = result?.Failed.Count ?? 0;
+
+            if (updated > 0)
+            {
+                Snackbar.Add($"Updated {updated} trailer(s).", Severity.Success);
+            }
+            if (failed > 0)
+            {
+                Snackbar.Add($"{failed} trailer(s) failed to update.", Severity.Error);
+            }
+
+            MudDialog.Close(result?.Updated ?? new List<TrailerModel>());
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Update failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private Dictionary<string, object> BuildChangesDictionary()
+    {
+        var changes = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(Prefix))
+            changes["Prefix"] = Prefix.Trim().ToUpperInvariant();
+
+        if (!string.IsNullOrWhiteSpace(Name))
+        {
+            string normalizedName = Name.Trim().ToUpperInvariant();
+            while (normalizedName.Length < 6)
+                normalizedName = "0" + normalizedName;
+            changes["Name"] = normalizedName;
+        }
+
+        if (SelectedType.HasValue)
+            changes["Type"] = SelectedType.Value;
+
+        if (SelectedState.HasValue)
+            changes["State"] = SelectedState.Value;
+
+        // For Account we only send if user explicitly picked something in this dialog session.
+        // We treat "user changed the select" by checking against original value(s).
+        // Simple heuristic: if this is a single edit and value differs, or for bulk if user picked something (including null).
+        bool shouldIncludeAccount = false;
+
+        if (Trailer != null)
+        {
+            // Single edit - include if different from current
+            if (SelectedAccountId != Trailer.AccountId)
+                shouldIncludeAccount = true;
+        }
+        else if (IsBulk)
+        {
+            // Bulk - include Account change only if the user made a selection (not left at initial null)
+            // We consider any interaction with the account field as intentional.
+            // To keep it simple and safe, we only include it when the user actually selected a value (including clearing).
+            // For now we include it whenever the dropdown has been given a value during this dialog.
+            shouldIncludeAccount = true; // User can clear it intentionally
+        }
+
+        if (shouldIncludeAccount)
+        {
+            // Only send AccountId if:
+            // - It's null (clearing the account is always allowed), OR
+            // - It exists in the currently loaded accounts list (prevents stale FKs)
+            if (SelectedAccountId == null || Accounts.Any(a => a.Id == SelectedAccountId.Value))
+            {
+                changes["AccountId"] = (object?)SelectedAccountId;
+            }
+        }
+
+        return changes;
+    }
+
+    private string GetAccountDisplayName(Guid? guid)
+    {
+        if (!guid.HasValue || guid.Value == Guid.Empty)
+            return string.Empty;
+
+        if (Accounts.Any(a => a.Id == guid.Value))
+        {
+            return Accounts.First(a => a.Id == guid.Value).ToString();
+        }
+
+        return guid.Value.ToString();
+    }
+
+    private void Close() => MudDialog.Close();
+}

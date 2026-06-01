@@ -1,0 +1,185 @@
+﻿@page "/zones"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using OutsourceTracker.BusinessUnit.Zones
+@using OutsourceTracker.Geolocation
+@using OutsourceTracker.Pages.Dialogs
+@using OutsourceTracker.Services.Zones
+@inject IZoneService Zones
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 pb-4">
+    <div class="d-flex justify-space-between align-center mb-4">
+        <div>
+            <MudText Typo="Typo.h4">Zones</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Geographic or logical areas for equipment tracking. Use the boundary tools or API to define polygon geometry.
+            </MudText>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreateDialog">
+            New Zone
+        </MudButton>
+    </div>
+
+    <MudTable Items="@zones" Hover="true" Dense="true" Filter="FilterZones"
+              SortLabel="Sort By" Loading="@isLoading">
+        <ToolBarContent>
+            <MudTextField @bind-Value="searchString" Placeholder="Search zones..."
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true" Class="mt-0" />
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<Zone, object>(x => x.ShortCode)">Short Code</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<Zone, object>(x => x.FullName)">Name</MudTableSortLabel></MudTh>
+            <MudTh>Created</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Short Code">
+                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@context.ShortCode</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Name">@context.FullName</MudTd>
+            <MudTd DataLabel="Created">
+                <MudText Typo="Typo.body2">@context.CreatedOn.ToLocalTime().ToString("g")</MudText>
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="() => OpenEditDialog(context)" Title="Edit name/short code" />
+                <MudIconButton Icon="@Icons.Material.Filled.Map" Size="Size.Small" Color="Color.Info"
+                               OnClick="() => OpenBoundaryDialog(context)" Title="Edit boundary & points" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="() => ConfirmDelete(context)" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private List<Zone> zones = new();
+    private string searchString = "";
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadZones();
+
+        // Preload the heavy boundary editor JS module so the dialog opens faster
+        // when the user clicks the map icon. This is cheap and non-blocking.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await JS.InvokeAsync<IJSObjectReference>("import", "./js/zone-boundary-map.js");
+            }
+            catch { /* ignore preload errors */ }
+        });
+    }
+
+    private async Task LoadZones()
+    {
+        isLoading = true;
+        try
+        {
+            zones = await Zones.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load zones: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private bool FilterZones(Zone zone)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+
+        var term = searchString.Trim();
+        return zone.ShortCode.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+               zone.FullName.Contains(term, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters<ZoneDialog>();
+        var dialog = await DialogService.ShowAsync<ZoneDialog>("Create Zone", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadZones();
+        }
+    }
+
+    private async Task OpenEditDialog(Zone zone)
+    {
+        var parameters = new DialogParameters<ZoneDialog>
+        {
+            { x => x.ExistingZone, zone }
+        };
+
+        var dialog = await DialogService.ShowAsync<ZoneDialog>("Edit Zone", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadZones();
+        }
+    }
+
+    private async Task OpenBoundaryDialog(Zone zone)
+    {
+        var parameters = new DialogParameters<ZoneBoundaryDialog>
+        {
+            { x => x.ExistingZone, zone }
+        };
+
+        var dialog = await DialogService.ShowAsync<ZoneBoundaryDialog>($"Edit Boundary - {zone.ShortCode}", parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true });
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadZones(); // Refresh to pick up any geometry changes if we later show them
+        }
+    }
+
+    private async Task ConfirmDelete(Zone zone)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, $"Delete zone '{zone}'? Trailers assigned to this zone will have their zone cleared." },
+            { x => x.ButtonText, "Delete" },
+            { x => x.Color, Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete Zone?", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            try
+            {
+                bool success = await Zones.DeleteAsync(zone.Id);
+                if (success)
+                {
+                    Snackbar.Add("Zone deleted.", Severity.Success);
+                    await LoadZones();
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Failed to delete zone: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

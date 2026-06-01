@@ -1,0 +1,303 @@
+﻿@using OutsourceTracker.BusinessUnit.Zones
+@using OutsourceTracker.Equipment
+@using OutsourceTracker.Equipment.Trailers
+@using OutsourceTracker.Geolocation
+@using OutsourceTracker.Services.Equipment
+@using OutsourceTracker.Services.Zones
+@using System.ComponentModel.DataAnnotations
+@using OutsourceTracker.Services.Equipment.Trailers
+@inject TrailerService TrailerService
+@inject IZoneService ZoneService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IJSRuntime JS;
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="4">
+            <!-- Trailer Summary -->
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Selected Trailers (@Trailers.Count)</MudText>
+                <MudList T="TrailerModel" Dense="true">
+                    @foreach (var trailer in Trailers)
+                    {
+                        <MudListItem>
+                            <MudText>@trailer.FullName - Current: @trailer.Location</MudText>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudPaper>
+
+            <!-- GPS Button -->
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.MyLocation"
+                       OnClick="GetCurrentLocationAsync"
+                       Disabled="@IsGettingLocation">
+                @if (IsGettingLocation)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <MudText>Getting Precise Location...</MudText>
+                }
+                else
+                {
+                    <MudText>Get Current GPS Location</MudText>
+                }
+            </MudButton>
+
+            <!-- Zone Selector -->
+            <MudSelect T="Zone" Label="Or select a Zone (uses Trailer Pool if available)" 
+                       Value="SelectedZone"
+                       ValueChanged="OnZoneSelected"
+                       Clearable="true"
+                       ToStringFunc="@(z => z?.ToString())"
+                       Variant="Variant.Outlined"
+                       OnClear="ClearZoneSelection"
+                       Disabled="AvailableZones.Count == 0">
+                @foreach (var zone in AvailableZones)
+                {
+                    <MudSelectItem T="Zone" Value="zone">@zone</MudSelectItem>
+                }
+            </MudSelect>
+            @if (SelectedZone != null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Info">
+                    Using trailer pool / center from zone "@SelectedZone"
+                </MudText>
+            }
+
+            <!-- Coordinates -->
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="Lat"
+                                  Label="Latitude"
+                                  Variant="Variant.Outlined"
+                                  AdornmentIcon="@Icons.Material.Filled.LocationOn" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="Lng"
+                                  Label="Longitude"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+
+            @if (Model.Accuracy > 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Info">
+                    Accuracy: @Model.Accuracy.ToString("F1") meters
+                </MudText>
+            }
+
+            <!-- Optional Manual Override -->
+            <MudText Typo="Typo.caption" Class="mt-2">
+                Tip: Click the button above for best accuracy. You can also manually edit the fields.
+            </MudText>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="SubmitAsync"
+                   Disabled="@(!CanSubmit)">
+
+            @if (IsSubmitting)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            }
+            Update Location
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public List<TrailerModel> Trailers { get; set; } = new();
+
+    private double? _lat;
+    private double? _lng;
+
+    private double? Lat
+    {
+        get => _lat;
+        set
+        {
+            if (_lat != value)
+            {
+                _lat = value;
+                ClearSelectedZoneIfManualEdit();
+            }
+        }
+    }
+
+    private double? Lng
+    {
+        get => _lng;
+        set
+        {
+            if (_lng != value)
+            {
+                _lng = value;
+                ClearSelectedZoneIfManualEdit();
+            }
+        }
+    }
+
+    private void ClearSelectedZoneIfManualEdit()
+    {
+        if (SelectedZone != null)
+        {
+            SelectedZone = null;
+            // No StateHasChanged needed here as the setter is during binding
+        }
+    }
+
+    private bool CanSubmit => !IsSubmitting && !IsGettingLocation && Lat.HasValue && Lng.HasValue;
+
+    private EquipmentLocationUpdateRequest<Guid> Model { get; set; } = new();
+    private bool IsSubmitting { get; set; }
+    private bool IsGettingLocation { get; set; }
+
+    private IJSObjectReference? Geolocation { get; set; }
+
+    private List<Zone> AvailableZones { get; set; } = new();
+    private Zone? SelectedZone { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (Trailers.Any())
+        {
+            Model.Ids = Trailers.Select(t => t.Id).ToArray();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        try
+        {
+            Geolocation = await JS.InvokeAsync<IJSObjectReference>("import", "/Pages/Dialogs/LocationUpdateDialog.razor.js");
+        }
+        catch (JSException jsEx)
+        {
+            Snackbar.Add($"Failed to load geolocation module: {jsEx.Message}", Severity.Error);
+        }
+
+        // Load zones so user can quickly select a zone center as the location
+        try
+        {
+            AvailableZones = await ZoneService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load zones: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!Lat.HasValue || !Lng.HasValue) return;
+
+        IsSubmitting = true;
+        Model.Location = new Vector2(Lat.Value, Lng.Value);
+
+        try
+        {
+            var result = await TrailerService.SpotAsync(Model);
+            if (result.Success)
+            {
+                MudDialog.Close(DialogResult.Ok(result));
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
+    }
+
+    private async Task GetCurrentLocationAsync()
+    {
+        if (Geolocation == null) return;
+
+        IsGettingLocation = true;
+
+        try
+        {
+            var options = new
+            {
+                enableHighAccuracy = true,
+                maximumAge = 5000,
+                timeout = 10000
+            };
+
+            var result = await Geolocation.InvokeAsync<GeolocationResult>("getCurrentPosition", options);
+            Lat = result.Latitude;
+            Lng = result.Longitude;
+            Model.Accuracy = result.Accuracy;
+            Model.Location = new Vector2(Lat.Value, Lng.Value);
+
+            // Clear zone selection when using GPS (user chose a more precise location)
+            SelectedZone = null;
+        }
+        catch (JSException jsEx)
+        {
+            Snackbar.Add($"Geolocation error: {jsEx.Message}", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Unexpected error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsGettingLocation = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private record GeolocationResult(double Latitude, double Longitude, double Accuracy, long Timestamp);
+
+    private void OnZoneSelected(Zone? zone)
+    {
+        SelectedZone = zone;
+
+        if (zone != null)
+        {
+            Vector2 chosenLocation;
+
+            if (zone.TrailerPools != null && zone.TrailerPools.Any())
+            {
+                // Prefer a dedicated trailer pool location if available
+                // (in a real app we might let the user pick which pool; for now take the first)
+                chosenLocation = zone.TrailerPools.First();
+            }
+            else if (zone.Boundry.VertexCount > 0)
+            {
+                chosenLocation = zone.Boundry.Center;
+            }
+            else
+            {
+                return; // nothing usable
+            }
+
+            // Set backing fields directly to avoid triggering the "manual edit" clear logic
+            _lat = chosenLocation.X;
+            _lng = chosenLocation.Y;
+            Model.Accuracy = 0;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearZoneSelection()
+    {
+        SelectedZone = null;
+        // Keep any existing Lat/Lng so user can still submit or adjust
+    }
+}

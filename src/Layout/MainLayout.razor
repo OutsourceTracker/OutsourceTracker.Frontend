@@ -25,7 +25,6 @@
                  TransformOrigin="Origin.TopRight"
                  Class="mr-3"
                  LockScroll="true">
-
             <ActivatorContent>
                 <MudAvatar Color="Color.Primary"
                            Size="Size.Medium"
@@ -38,9 +37,7 @@
                 <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="/profile">Profile</MudMenuItem>
                 <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="/user-settings">Settings</MudMenuItem>
                 <MudMenuItem Icon="@Icons.Material.Filled.Help" Href="/help">Help & Support</MudMenuItem>
-                
                 <MudDivider />
-                
                 <MudMenuItem Icon="@Icons.Material.Filled.Logout"
                              OnClick="HandleLogout"
                              Color="Color.Error">
@@ -56,7 +53,6 @@
                ClipMode="DrawerClipMode.Docked"
                Width="260px"
                MiniWidth="72px">
-
         <MudNavMenu>
             <MudNavLink Href="/dashboard" Icon="@Icons.Material.Filled.Dashboard" Match="NavLinkMatch.All">
                 Dashboard
@@ -64,10 +60,24 @@
             <MudNavLink Href="/trailers" Icon="@Icons.Material.Filled.TireRepair" Match="NavLinkMatch.All">
                 Trailers
             </MudNavLink>
+
+            <MudDivider Class="my-2" />
+
+            <MudText Typo="Typo.caption" Class="px-4 mud-text-secondary">Business Unit</MudText>
+
+            <MudNavLink Href="/organizational-units" Icon="@Icons.Material.Filled.AccountTree" Match="NavLinkMatch.All">
+                Organizational Units
+            </MudNavLink>
+            <MudNavLink Href="/accounts" Icon="@Icons.Material.Filled.Business" Match="NavLinkMatch.All">
+                Accounts
+            </MudNavLink>
+            <MudNavLink Href="/zones" Icon="@Icons.Material.Filled.Place" Match="NavLinkMatch.All">
+                Zones
+            </MudNavLink>
         </MudNavMenu>
     </MudDrawer>
 
-    <MudMainContent>
+    <MudMainContent Class="d-flex flex-column" Style="height: 100%; overflow: hidden;">
         @Body
     </MudMainContent>
 </MudLayout>

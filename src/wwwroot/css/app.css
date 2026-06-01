@@ -90,3 +90,44 @@ body {
 #app:not(:has(.startup-loader)) .startup-loader {
     display: none;
 }
+
+/* Top-down MudBlazor scrolling support */
+.mud-main-content {
+    height: 100% !important;
+    overflow: hidden;
+}
+
+/* Ensure list scrolling works */
+.overflow-auto {
+    scrollbar-width: thin;
+    scrollbar-color: #c4c4c4 transparent;
+}
+
+    .overflow-auto::-webkit-scrollbar-thumb {
+        background: #c4c4c4;
+        border-radius: 3px;
+    }
+
+/* =============================================
+   Zone Boundary Editor Map Loading Overlay
+   ============================================= */
+.zone-map-loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--mud-palette-surface, #ffffff);
+    opacity: 0.96;
+    z-index: 10;
+    border-radius: 4px;
+    text-align: center;
+    padding: 16px;
+}
+
+/* Dark theme support for the overlay */
+.mud-theme-dark .zone-map-loading-overlay,
+[data-theme="dark"] .zone-map-loading-overlay {
+    background: var(--mud-palette-surface, #1e1e1e);
+}

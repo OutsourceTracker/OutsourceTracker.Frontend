@@ -1,50 +1,102 @@
 ﻿@using OutsourceTracker.Equipment.Trailers
 @using OutsourceTracker.Services
+@using OutsourceTracker.Services.DataModels
 @using OutsourceTracker.Services.Equipment
 @inject IEquipmentService<TrailerModel> Trailers
 @inject ClipboardService Clipboard
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject ILogger<BulkCreateTrailersDialog> Logger
 
 <MudDialog MaxWidth="MaxWidth.Large" FullWidth="true">
     <DialogContent>
         <MudText Typo="Typo.h6" GutterBottom="true">Add Multiple Trailers</MudText>
-        <MudText Typo="Typo.body2" Class="mb-4">Add as many trailers as needed. Click "Add Row" to continue.</MudText>
 
-        <MudTable Items="@items" Hover="true" Dense="true" Class="mb-4">
-            <ToolBarContent>
-                <MudButton OnClick="AddRow" StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Outlined">Add Row</MudButton>
-            </ToolBarContent>
-            <HeaderContent>
-                <MudTh>Prefix</MudTh>
-                <MudTh>Name/Number</MudTh>
-                <MudTh>Type</MudTh>
-                <MudTh></MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd>
-                    <MudTextField @bind-Value="context.Prefix" Immediate="true" For="() => context.Prefix" />
-                </MudTd>
-                <MudTd>
-                    <MudTextField @bind-Value="context.Name" Immediate="true" For="() => context.Name" />
-                </MudTd>
-                <MudTd>
-                    <MudSelect T="TrailerType" @bind-Value="context.Type" Style="min-width:140px;" For="() => context.Type">
-                        <MudSelectItem Value="TrailerType.Van">Dry Van</MudSelectItem>
-                        <MudSelectItem Value="TrailerType.Reefer">Reefer</MudSelectItem>
-                        <MudSelectItem Value="TrailerType.Flatbed">Flatbed</MudSelectItem>
-                        <MudSelectItem Value="TrailerType.Conestoga">Conestoga</MudSelectItem>
-                    </MudSelect>
-                </MudTd>
-                <MudTd>
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => RemoveRow(context)" />
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
+        @if (!HasResults)
+        {
+            <MudText Typo="Typo.body2" Class="mb-4">Add as many trailers as needed. Paste tab-separated data from Excel/Sheets (Prefix, Name, Type) or click "Add Row".</MudText>
+
+            <MudTable Items="@items" Hover="true" Dense="true" Class="mb-4">
+                <ToolBarContent>
+                    <MudButton OnClick="AddRow" StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Outlined">Add Row</MudButton>
+                </ToolBarContent>
+                <HeaderContent>
+                    <MudTh>Prefix</MudTh>
+                    <MudTh>Name/Number</MudTh>
+                    <MudTh>Type</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <MudTextField @bind-Value="context.Prefix" Immediate="true" />
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField @bind-Value="context.Name" Immediate="true" />
+                    </MudTd>
+                    <MudTd>
+                        <MudSelect T="TrailerType" @bind-Value="context.Type" Style="min-width:140px;">
+                            <MudSelectItem Value="TrailerType.Van">Dry Van</MudSelectItem>
+                            <MudSelectItem Value="TrailerType.Reefer">Reefer</MudSelectItem>
+                            <MudSelectItem Value="TrailerType.Flatbed">Flatbed</MudSelectItem>
+                            <MudSelectItem Value="TrailerType.Conestoga">Conestoga</MudSelectItem>
+                        </MudSelect>
+                    </MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => RemoveRow(context)" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+        else
+        {
+            @* Results summary after bulk create *@
+            <MudText Typo="Typo.body2" Class="mb-2">Bulk create completed.</MudText>
+
+            <MudAlert Severity="Severity.Success" Class="mb-2">
+                Successfully created <strong>@BulkResult?.Created.Count</strong> trailer(s).
+            </MudAlert>
+
+            @if (BulkResult != null && BulkResult.Failed.Count > 0)
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-3">
+                    <strong>@BulkResult.Failed.Count</strong> trailer(s) failed:
+                </MudAlert>
+
+                <MudTable Items="@BulkResult.Failed" Dense="true" Hover="true" Class="mb-4">
+                    <HeaderContent>
+                        <MudTh>Trailer</MudTh>
+                        <MudTh>Error</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Key</MudTd>
+                        <MudTd>@context.Value</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        }
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Close">Cancel</MudButton>
-        <MudButton Color="Color.Primary" OnClick="HandleBulkCreate" Disabled="@(!items.Any())">Create @items.Count Trailers</MudButton>
+        @if (!HasResults)
+        {
+            <MudButton OnClick="Close">Cancel</MudButton>
+            <MudButton Color="Color.Primary" OnClick="HandleBulkCreate" Disabled="@(items.Count == 0 || IsProcessing)">
+                @if (IsProcessing)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Creating...</span>
+                }
+                else
+                {
+                    <span>Create @items.Count Trailers</span>
+                }
+            </MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="CloseWithResults" Color="Color.Primary" Variant="Variant.Filled">
+                Close
+            </MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
@@ -52,6 +104,10 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
 
     private List<TrailerCreateRequest> items = new() { new TrailerCreateRequest() };
+    private BulkCreateResult<TrailerModel>? BulkResult;
+    private bool IsProcessing = false;
+
+    private bool HasResults => BulkResult != null;
 
     private void AddRow() => items.Add(new TrailerCreateRequest());
 
@@ -72,6 +128,7 @@
         try
         {
             var text = await Clipboard.ReadTextAsync();
+            if (string.IsNullOrWhiteSpace(text)) return;
 
             string[] rows = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -79,17 +136,20 @@
             for (int i = 0; i < rows.Length; i++)
             {
                 string[] valuesSplit = rows[i].Split('\t', StringSplitOptions.RemoveEmptyEntries);
+                if (valuesSplit.Length < 2) continue;
+
                 string prefix = valuesSplit[0].Trim();
                 string name = valuesSplit[1].Trim();
-                string typeStr = valuesSplit[2].Trim();
+                string typeStr = valuesSplit.Length > 2 ? valuesSplit[2].Trim() : "Van";
 
                 TrailerCreateRequest t = new()
                 {
-                    Prefix = prefix.ToUpper(),
-                    Name = name.ToUpper(),
+                    Prefix = prefix.ToUpperInvariant(),
+                    Name = name.ToUpperInvariant(),
                     Type = Enum.TryParse<TrailerType>(typeStr, true, out var type) ? type : TrailerType.Van
                 };
 
+                // Pad name with leading zeros to 6 chars (existing behavior)
                 while (t.Name.Length < 6)
                 {
                     t.Name = "0" + t.Name;
@@ -107,43 +167,70 @@
                 StateHasChanged();
             }
         }
-        catch
+        catch (Exception ex)
         {
-
+            Logger?.LogDebug(ex, "Clipboard paste for bulk trailers failed or contained no valid data.");
         }
     }
 
     private async Task HandleBulkCreate()
     {
-        if (items.Count == 0) return;
+        if (items.Count == 0 || IsProcessing) return;
 
-        List<TrailerModel> created = new();
-        for (int i = 0; i < items.Count; i++)
+        IsProcessing = true;
+        StateHasChanged();
+
+        try
         {
-            TrailerCreateRequest item = items[i];
+            // Filter out obviously empty rows before sending
+            var validItems = items
+                .Where(i => !string.IsNullOrWhiteSpace(i.Prefix) && !string.IsNullOrWhiteSpace(i.Name))
+                .ToList();
 
-            if (string.IsNullOrWhiteSpace(item.Prefix) || string.IsNullOrWhiteSpace(item.Name))
+            if (validItems.Count == 0)
             {
-                continue;
+                Snackbar.Add("No valid trailers to create (Prefix and Name are required).", Severity.Warning);
+                return;
             }
 
-            TrailerModel? trailerModel = await Trailers.CreateAsync(item);
+            BulkResult = await Trailers.CreateManyAsync(validItems);
 
-            if (trailerModel != null)
+            if (BulkResult != null)
             {
-                created.Add(trailerModel);
+                int created = BulkResult.Created.Count;
+                int failed = BulkResult.Failed.Count;
+
+                if (created > 0)
+                {
+                    Snackbar.Add($"Created {created} trailer(s).", Severity.Success);
+                }
+                if (failed > 0)
+                {
+                    Snackbar.Add($"{failed} trailer(s) failed to create (see details).", Severity.Error);
+                }
+            }
+            else
+            {
+                Snackbar.Add("Bulk create request failed unexpectedly.", Severity.Error);
+                BulkResult = new BulkCreateResult<TrailerModel>();
             }
         }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Bulk create failed: {ex.Message}", Severity.Error);
+            BulkResult = new BulkCreateResult<TrailerModel>();
+        }
+        finally
+        {
+            IsProcessing = false;
+            StateHasChanged();
+        }
+    }
 
-        if (created.Count > 0)
-        {
-            Snackbar.Add($"Successfully created {created.Count} trailers", Severity.Success);
-            MudDialog.Close(created);
-        }
-        else
-        {
-            Snackbar.Add("Failed to create trailers. Please check your input and try again.", Severity.Error);
-        }
+    private void CloseWithResults()
+    {
+        var created = BulkResult?.Created ?? new List<TrailerModel>();
+        MudDialog.Close(created);
     }
 
     private void Close() => MudDialog.Close();

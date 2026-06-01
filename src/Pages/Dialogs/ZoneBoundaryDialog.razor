@@ -1,0 +1,641 @@
+﻿@using OutsourceTracker.BusinessUnit.Zones
+@using OutsourceTracker.Geolocation
+@using OutsourceTracker.Services.Zones
+@inject IZoneService Zones
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+@using System.Text.Json
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+            Click the map to add points. Switch modes below to draw the boundary or place entry/exit/dock/trailer pool points. Drag markers to move them.
+        </MudText>
+
+        <!-- Google Map -->
+        <MudPaper Elevation="2" Class="mb-4" Style="overflow: hidden; position: relative;">
+            <div id="zone-boundary-map" style="width: 100%; height: 420px; min-height: 320px;"></div>
+
+            @if (_isMapLoading)
+            {
+                <div class="zone-map-loading-overlay">
+                    <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+                    <MudText Typo="Typo.body2" Class="mt-3 mud-text-secondary">
+                        Loading interactive map...
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="mt-1 mud-text-disabled">
+                        Initializing Google Maps and point data
+                    </MudText>
+                </div>
+            }
+        </MudPaper>
+
+        <!-- Drawing Mode Selector -->
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-3">
+            <MudText Typo="Typo.subtitle2" Class="mr-2">Drawing Mode:</MudText>
+
+            <MudButton @onclick="SetBoundaryMode"
+                       Color="Color.Primary"
+                       Variant="Variant.Outlined"
+                       Size="Size.Small">
+                Border
+            </MudButton>
+            <MudButton @onclick="SetEntryMode"
+                       Color="Color.Success"
+                       Variant="Variant.Outlined"
+                       Size="Size.Small">
+                Entry
+            </MudButton>
+            <MudButton @onclick="SetExitMode"
+                       Color="Color.Warning"
+                       Variant="Variant.Outlined"
+                       Size="Size.Small">
+                Exit
+            </MudButton>
+            <MudButton @onclick="SetDockMode"
+                       Color="Color.Secondary"
+                       Variant="Variant.Outlined"
+                       Size="Size.Small">
+                Dock
+            </MudButton>
+            <MudButton @onclick="SetTrailerPoolMode"
+                       Color="Color.Tertiary"
+                       Variant="Variant.Outlined"
+                       Size="Size.Small">
+                Pools
+            </MudButton>
+
+            <MudButton Size="Size.Small" Variant="Variant.Text" @onclick="StopDrawingMode">
+                Stop Drawing
+            </MudButton>
+
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ZoomOutMap" OnClick="FitMapToPoints">
+                Fit
+            </MudButton>
+        </MudStack>
+
+        @if (ValidationErrors.Any())
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                @foreach (var err in ValidationErrors)
+                {
+                    <div>@err</div>
+                }
+            </MudAlert>
+        }
+
+        <!-- Boundary Polygon (Primary) -->
+        <MudCard Class="mb-4" Elevation="2">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.subtitle1">
+                        <MudIcon Icon="@Icons.Material.Filled.CropSquare" Class="mr-2" />
+                        Boundary Polygon <MudChip T="string" Size="Size.Small" Color="Color.Primary">@BoundryPoints.Count points</MudChip>
+                    </MudText>
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" @onclick="async () => await AddPoint(BoundryPoints)">
+                        Add Point
+                    </MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" @onclick="async () => await ClearPoints(BoundryPoints)">
+                        Clear
+                    </MudButton>
+                </CardHeaderActions>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText Typo="Typo.caption" Class="mb-2">Requires at least 3 distinct points (4+ recommended to form a closed shape).</MudText>
+                @PointTable(BoundryPoints)
+            </MudCardContent>
+        </MudCard>
+
+        <!-- Optional Point Categories (collapsed by default to speed up initial dialog render) -->
+        <MudExpansionPanels MultiExpansion="true" Class="mb-2">
+            <MudExpansionPanel Text="Entry Points" Expanded="false">
+                <TitleContent>
+                    <MudText Typo="Typo.subtitle2">Entry Points <MudChip T="string" Size="Size.Small">@EntryPoints.Count</MudChip></MudText>
+                </TitleContent>
+                <ChildContent>
+                    <MudStack Row Justify="Justify.SpaceBetween" Class="mb-2">
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" @onclick="async () => await AddPoint(EntryPoints)">Add</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" @onclick="async () => await ClearPoints(EntryPoints)">Clear</MudButton>
+                    </MudStack>
+                    @PointTable(EntryPoints)
+                </ChildContent>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Exit Points" Expanded="false">
+                <TitleContent>
+                    <MudText Typo="Typo.subtitle2">Exit Points <MudChip T="string" Size="Size.Small">@ExitPoints.Count</MudChip></MudText>
+                </TitleContent>
+                <ChildContent>
+                    <MudStack Row Justify="Justify.SpaceBetween" Class="mb-2">
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" @onclick="async () => await AddPoint(ExitPoints)">Add</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" @onclick="async () => await ClearPoints(ExitPoints)">Clear</MudButton>
+                    </MudStack>
+                    @PointTable(ExitPoints)
+                </ChildContent>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Dock Points" Expanded="false">
+                <TitleContent>
+                    <MudText Typo="Typo.subtitle2">Dock Points <MudChip T="string" Size="Size.Small">@DockPoints.Count</MudChip></MudText>
+                </TitleContent>
+                <ChildContent>
+                    <MudStack Row Justify="Justify.SpaceBetween" Class="mb-2">
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" @onclick="async () => await AddPoint(DockPoints)">Add</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" @onclick="async () => await ClearPoints(DockPoints)">Clear</MudButton>
+                    </MudStack>
+                    @PointTable(DockPoints)
+                </ChildContent>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Trailer Pools" Expanded="false">
+                <TitleContent>
+                    <MudText Typo="Typo.subtitle2">Trailer Pools <MudChip T="string" Size="Size.Small">@TrailerPools.Count</MudChip></MudText>
+                </TitleContent>
+                <ChildContent>
+                    <MudStack Row Justify="Justify.SpaceBetween" Class="mb-2">
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" @onclick="async () => await AddPoint(TrailerPools)">Add</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" @onclick="async () => await ClearPoints(TrailerPools)">Clear</MudButton>
+                    </MudStack>
+                    @PointTable(TrailerPools)
+                </ChildContent>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+
+        <!-- Quick Actions -->
+        <MudStack Row="true" Spacing="2" Class="mt-4">
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.MyLocation"
+                       OnClick="AddCurrentLocationToBoundary" Disabled="@IsGettingLocation">
+                @if (IsGettingLocation)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Getting location...</span>
+                }
+                else
+                {
+                    <span>Add Current GPS to Boundary</span>
+                }
+            </MudButton>
+
+            <MudButton Variant="Variant.Text" @onclick="ClosePolygon">
+                Close Polygon (duplicate first point)
+            </MudButton>
+        </MudStack>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="@IsSaving">
+            @if (IsSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Saving Boundary...</span>
+            }
+            else
+            {
+                <span>Save Boundary</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Zone? ExistingZone { get; set; }
+
+    private List<Vector2> BoundryPoints { get; set; } = new();
+    private List<Vector2> EntryPoints { get; set; } = new();
+    private List<Vector2> ExitPoints { get; set; } = new();
+    private List<Vector2> DockPoints { get; set; } = new();
+    private List<Vector2> TrailerPools { get; set; } = new();
+
+    private List<string> ValidationErrors { get; set; } = new();
+    private bool IsSaving = false;
+    private bool IsGettingLocation = false;
+
+    private string currentDrawingMode = "none";
+    private bool _hasPerformedInitialFit = false;
+
+    /// <summary>
+    /// Controls the loading overlay shown over the map area while Google Maps
+    /// and the boundary editor JS initialize (and the first point sync completes).
+    /// </summary>
+    private bool _isMapLoading = true;
+
+    private async Task SetBoundaryMode() => await SetDrawingMode("boundary");
+    private async Task SetEntryMode() => await SetDrawingMode("entry");
+    private async Task SetExitMode() => await SetDrawingMode("exit");
+    private async Task SetDockMode() => await SetDrawingMode("dock");
+
+    private async Task SetTrailerPoolMode() => await SetDrawingMode("trailerpool");
+
+    private async Task StopDrawingMode() => await SetDrawingMode("none");
+
+    private IJSObjectReference? boundaryMapModule;
+
+    private string ZoneDisplayName => ExistingZone is null
+        ? "New Zone"
+        : $"{ExistingZone.ShortCode} - {ExistingZone.FullName}";
+
+    protected override void OnParametersSet()
+    {
+        if (ExistingZone != null)
+        {
+            // Load existing geometry
+            BoundryPoints = ExistingZone.Boundry.Points.ToArray().ToList();
+            EntryPoints = ExistingZone.EntryPoints?.ToList() ?? new();
+            ExitPoints = ExistingZone.ExitPoints?.ToList() ?? new();
+            DockPoints = ExistingZone.DockPoints?.ToList() ?? new();
+            TrailerPools = ExistingZone.TrailerPools?.ToList() ?? new();
+        }
+    }
+
+    private async Task AddPoint(List<Vector2> target)
+    {
+        double baseX = 0, baseY = 0;
+        if (target.Any())
+        {
+            var last = target[^1];
+            baseX = last.X;
+            baseY = last.Y;
+        }
+        else if (BoundryPoints.Any())
+        {
+            baseX = BoundryPoints[0].X;
+            baseY = BoundryPoints[0].Y;
+        }
+
+        target.Add(new Vector2(baseX, baseY));
+        await InvokeAsync(StateHasChanged);
+        await SyncMapFromLists();
+    }
+
+    private async Task ClearPoints(List<Vector2> target)
+    {
+        target.Clear();
+        await InvokeAsync(StateHasChanged);
+        await SyncMapFromLists();
+    }
+
+    private async Task AddCurrentLocationToBoundary()
+    {
+        IsGettingLocation = true;
+        try
+        {
+            var position = await JS.InvokeAsync<GeolocationPosition>("navigator.geolocation.getCurrentPositionAsync");
+            if (position?.Coords != null)
+            {
+                var newPoint = new Vector2(position.Coords.Latitude, position.Coords.Longitude);
+                BoundryPoints.Add(newPoint);
+                Snackbar.Add("Added current GPS location to boundary.", Severity.Success);
+                StateHasChanged();
+                await SyncMapFromLists();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to get location: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsGettingLocation = false;
+        }
+    }
+
+    private async Task ClosePolygon()
+    {
+        if (BoundryPoints.Count >= 3)
+        {
+            var first = BoundryPoints[0];
+            if (!BoundryPoints[^1].Equals(first)) // avoid exact duplicates at end if already closed
+            {
+                BoundryPoints.Add(first);
+                await InvokeAsync(StateHasChanged);
+                await SyncMapFromLists();
+            }
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (ExistingZone == null)
+        {
+            Snackbar.Add("Cannot save boundary: No zone selected.", Severity.Error);
+            return;
+        }
+
+        ValidationErrors.Clear();
+
+        if (BoundryPoints.Count < 3)
+        {
+            ValidationErrors.Add("Boundary polygon requires at least 3 points.");
+        }
+
+        if (ValidationErrors.Any())
+        {
+            return;
+        }
+
+        IsSaving = true;
+
+        try
+        {
+            var request = new ZoneBoundaryRequest
+            {
+                FullName = ExistingZone.FullName,
+                BoundryPoints = BoundryPoints,
+                EntryPoints = EntryPoints,
+                ExitPoints = ExitPoints,
+                DockPoints = DockPoints,
+                TrailerPools = TrailerPools
+            };
+
+            bool success = await Zones.SetBoundaryAsync(ExistingZone.ShortCode, request);
+
+            if (success)
+            {
+                Snackbar.Add("Zone boundary saved successfully.", Severity.Success);
+                MudDialog.Close(true);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save boundary. Check the console or try again.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving boundary: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Close();
+
+    // ==================== GOOGLE MAPS INTEGRATION ====================
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Small delay before starting the heavy map + marker creation work.
+            // This gives MudDialog a chance to paint its shell first, improving perceived open speed.
+            await Task.Delay(120);
+
+            // Always initialize the map (even for new zones with no ExistingZone yet).
+            try
+            {
+                boundaryMapModule = await JS.InvokeAsync<IJSObjectReference>(
+                    "import", "./js/zone-boundary-map.js");
+
+                // Default center...
+                double centerLat = 39.8283;
+                double centerLng = -98.5795;
+                double zoom = 8;
+
+                if (BoundryPoints.Any())
+                {
+                    centerLat = BoundryPoints[0].X;
+                    centerLng = BoundryPoints[0].Y;
+                    zoom = 12;
+                }
+                else if (EntryPoints.Any() || ExitPoints.Any() || DockPoints.Any())
+                {
+                    Vector2? first = EntryPoints.FirstOrDefault();
+                    if (first == null) first = ExitPoints.FirstOrDefault();
+                    if (first == null) first = DockPoints.FirstOrDefault();
+
+                    if (first.HasValue)
+                    {
+                        centerLat = first.Value.X;
+                        centerLng = first.Value.Y;
+                        zoom = 12;
+                    }
+                }
+
+                bool initialized = await boundaryMapModule.InvokeAsync<bool>(
+                    "initBoundaryMap",
+                    "zone-boundary-map",
+                    centerLat,
+                    centerLng,
+                    zoom,
+                    DotNetObjectReference.Create(this));
+
+                if (initialized)
+                {
+                    await SyncMapFromLists();
+
+                    if (!_hasPerformedInitialFit)
+                    {
+                        _hasPerformedInitialFit = true;
+                        await FitMapToPoints();
+                    }
+                }
+
+                _isMapLoading = false;
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                _isMapLoading = false;
+                await InvokeAsync(StateHasChanged);
+
+                Snackbar.Add($"Failed to initialize map: {ex.Message}", Severity.Warning);
+                Console.WriteLine(ex);
+            }
+        }
+    }
+
+    private async Task SetDrawingMode(string mode)
+    {
+        currentDrawingMode = mode;
+        StateHasChanged();
+
+        if (boundaryMapModule != null)
+        {
+            await boundaryMapModule.InvokeVoidAsync("setDrawingMode", mode);
+        }
+    }
+
+    private async Task FitMapToPoints()
+    {
+        if (boundaryMapModule != null)
+        {
+            await boundaryMapModule.InvokeVoidAsync("fitToAllPoints");
+        }
+    }
+
+    /// <summary>
+    /// Push current C# lists to the map for visualization.
+    /// </summary>
+    private async Task SyncMapFromLists()
+    {
+        if (boundaryMapModule == null) return;
+
+        try
+        {
+            var boundaryJson = BoundryPoints.Select(p => new { x = p.X, y = p.Y }).ToList();
+            var entryJson = EntryPoints.Select(p => new { x = p.X, y = p.Y }).ToList();
+            var exitJson = ExitPoints.Select(p => new { x = p.X, y = p.Y }).ToList();
+            var dockJson = DockPoints.Select(p => new { x = p.X, y = p.Y }).ToList();
+            var trailerPoolJson = TrailerPools.Select(p => new { x = p.X, y = p.Y }).ToList();
+
+            await boundaryMapModule.InvokeVoidAsync("loadPoints", boundaryJson, entryJson, exitJson, dockJson, trailerPoolJson);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Sync map error: {ex}");
+        }
+    }
+
+    // Called from JavaScript when user clicks the map in a drawing mode
+    [JSInvokable]
+    public async Task OnMapPointAdded(string pointType, double x, double y)
+    {
+        var newPoint = new Vector2(x, y);
+
+        switch (pointType)
+        {
+            case "boundary":
+                BoundryPoints.Add(newPoint);
+                break;
+            case "entry":
+                EntryPoints.Add(newPoint);
+                break;
+            case "exit":
+                ExitPoints.Add(newPoint);
+                break;
+            case "dock":
+                DockPoints.Add(newPoint);
+                break;
+            case "trailerpool":
+                TrailerPools.Add(newPoint);
+                break;
+            default:
+                return;
+        }
+
+        await InvokeAsync(StateHasChanged);
+        await SyncMapFromLists(); // Redraw with new point
+    }
+
+    // Called from JavaScript when a marker is dragged
+    [JSInvokable]
+    public async Task OnMapPointMoved(string pointType, int index, double x, double y)
+    {
+        var newPoint = new Vector2(x, y);
+        List<Vector2> targetList = pointType switch
+        {
+            "boundary" => BoundryPoints,
+            "entry" => EntryPoints,
+            "exit" => ExitPoints,
+            "dock" => DockPoints,
+            "trailerpool" => TrailerPools,
+            _ => null
+        };
+
+        if (targetList != null && index >= 0 && index < targetList.Count)
+        {
+            targetList[index] = newPoint;
+            await InvokeAsync(StateHasChanged);
+            // No need to full reload — the marker already moved visually
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (boundaryMapModule != null)
+        {
+            try
+            {
+                await boundaryMapModule.DisposeAsync();
+            }
+            catch { /* ignore */ }
+        }
+    }
+
+    // Simple geolocation result shape (matches what JS returns)
+    private record GeolocationPosition(GeolocationCoords Coords);
+    private record GeolocationCoords(double Latitude, double Longitude, double? Accuracy);
+
+    // Reusable table component for editing a list of points
+    private partial class PointEditorTable : ComponentBase
+    {
+        [Parameter] public List<Vector2> Points { get; set; } = new();
+        [Parameter] public EventCallback OnPointsChanged { get; set; }
+        [Parameter] public bool Dense { get; set; } = false;
+
+        private async Task RemoveAt(int index)
+        {
+            if (index >= 0 && index < Points.Count)
+            {
+                Points.RemoveAt(index);
+                await OnPointsChanged.InvokeAsync();
+            }
+        }
+
+        private async Task UpdatePoint(int index, double? newX, double? newY)
+        {
+            if (index < 0 || index >= Points.Count) return;
+
+            var current = Points[index];
+            double x = newX ?? current.X;
+            double y = newY ?? current.Y;
+
+            Points[index] = new Vector2(x, y);
+            await OnPointsChanged.InvokeAsync();
+        }
+    }
+}
+
+@code {
+    // Reusable table renderer for a list of Vector2 points (using manual rows for reliable index support)
+    private RenderFragment<List<Vector2>> PointTable => points => @<MudTable T="Vector2" Items="points" Dense="true" Hover="true" Class="mb-2">
+        <HeaderContent>
+            <MudTh>#</MudTh>
+            <MudTh>X (Latitude)</MudTh>
+            <MudTh>Y (Longitude)</MudTh>
+            <MudTh style="width: 80px;"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            @{
+                // MudTable RowTemplate receives the item; we compute index via position in the original list
+                int idx = points.IndexOf(context);
+            }
+            <MudTd>@(idx + 1)</MudTd>
+            <MudTd>
+                <MudNumericField T="double" Value="@context.X" Format="F6" Step="0.000001"
+                                 ValueChanged="@(async (double v) => await UpdatePoint(points, idx, v, context.Y))" />
+            </MudTd>
+            <MudTd>
+                <MudNumericField T="double" Value="@context.Y" Format="F6" Step="0.000001"
+                                 ValueChanged="@(async (double v) => await UpdatePoint(points, idx, context.X, v))" />
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               @onclick="async () => await RemovePoint(points, idx)" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>;
+
+    private async Task UpdatePoint(List<Vector2> list, int index, double x, double y)
+    {
+        if (index < 0 || index >= list.Count) return;
+        list[index] = new Vector2(x, y);
+        await InvokeAsync(StateHasChanged);
+        await SyncMapFromLists();
+    }
+
+    private async Task RemovePoint(List<Vector2> list, int index)
+    {
+        if (index < 0 || index >= list.Count) return;
+        list.RemoveAt(index);
+        await InvokeAsync(StateHasChanged);
+        await SyncMapFromLists();
+    }
+}

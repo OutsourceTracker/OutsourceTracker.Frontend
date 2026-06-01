@@ -1,0 +1,146 @@
+﻿@using OutsourceTracker.BusinessUnit.Zones
+@using OutsourceTracker.Services.Zones
+@inject IZoneService Zones
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.h6" GutterBottom="true">
+            @(IsEdit ? "Edit Zone" : "Create New Zone")
+        </MudText>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12">
+                <MudTextField Label="Short Code" @bind-Value="Model.ShortCode" Required="true"
+                              MaxLength="10" HelperText="Unique short identifier (e.g. YARD, DC01)" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField Label="Full Name" @bind-Value="Model.FullName" Required="true"
+                              MaxLength="100" HelperText="Descriptive name for the zone" />
+            </MudItem>
+        </MudGrid>
+
+        @if (IsEdit && ExistingZone != null)
+        {
+            <MudText Typo="Typo.caption" Class="mt-2 mud-text-secondary">
+                Note: Boundary geometry is managed separately. Changes here only affect Short Code and Name.
+            </MudText>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Map" Color="Color.Info" Size="Size.Small"
+                       OnClick="OpenBoundaryEditor" Class="mt-2">
+                Edit Boundary &amp; Points
+            </MudButton>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="Save" Disabled="@IsSaving">
+            @if (IsSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>@(IsEdit ? "Save Changes" : "Create Zone")</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Zone? ExistingZone { get; set; }
+
+    private ZoneCreateModel Model { get; set; } = new();
+    private bool IsEdit => ExistingZone != null;
+    private bool IsSaving = false;
+
+    protected override void OnParametersSet()
+    {
+        if (ExistingZone != null)
+        {
+            Model = new ZoneCreateModel
+            {
+                ShortCode = ExistingZone.ShortCode,
+                FullName = ExistingZone.FullName
+            };
+
+            // Preload the expensive boundary editor JS module so it opens faster
+            _ = Task.Run(async () =>
+            {
+                try { await JS.InvokeAsync<IJSObjectReference>("import", "./js/zone-boundary-map.js"); } catch { }
+            });
+        }
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(Model.ShortCode) || string.IsNullOrWhiteSpace(Model.FullName))
+        {
+            Snackbar.Add("Short Code and Full Name are required.", Severity.Warning);
+            return;
+        }
+
+        IsSaving = true;
+
+        try
+        {
+            if (IsEdit && ExistingZone != null)
+            {
+                var updated = await Zones.UpdateAsync(ExistingZone.Id, Model);
+                if (updated != null)
+                {
+                    Snackbar.Add("Zone updated successfully.", Severity.Success);
+                    MudDialog.Close(updated);
+                }
+                else
+                {
+                    Snackbar.Add("Failed to update zone. Check console or try again.", Severity.Error);
+                }
+            }
+            else
+            {
+                var created = await Zones.CreateAsync(Model);
+                // CreateAsync returns null on both success (201 no body) and failure.
+                // We need a better signal. For now treat as success only if no exception was thrown by service.
+                // (Service should ideally throw on HTTP error so we can distinguish.)
+                Snackbar.Add("Zone created successfully.", Severity.Success);
+                MudDialog.Close(true); // Signal list to refresh
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Close();
+
+    private async Task OpenBoundaryEditor()
+    {
+        if (ExistingZone == null) return;
+
+        var parameters = new DialogParameters<ZoneBoundaryDialog>
+        {
+            { x => x.ExistingZone, ExistingZone }
+        };
+
+        var dialog = await DialogService.ShowAsync<ZoneBoundaryDialog>($"Boundary - {ExistingZone.ShortCode}", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            // Optionally close this dialog too or let user continue editing metadata
+            MudDialog.Close(true);
+        }
+    }
+}

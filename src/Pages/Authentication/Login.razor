@@ -5,6 +5,8 @@
 @layout EmptyLayout
 @inject UserService Users
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
 
 <EditForm Model="@model" OnValidSubmit="LoginAsync">
     <DataAnnotationsValidator />
@@ -35,7 +37,11 @@
 
     <MudDivider Class="my-8" />
 
-    <!-- Social logins can be added here later -->
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+               StartIcon="@Icons.Material.Filled.Fingerprint"
+               OnClick="LoginWithPasskeyAsync" Class="rounded-xl" Style="height: 48px;">
+        Sign in with Passkey
+    </MudButton>
 </EditForm>
 
 @code {
@@ -61,4 +67,32 @@
     private async Task LoginAsync() => await Users.LoginAsync(model);
 
     private void GoToRegister() => Navigation.NavigateTo("/register");
+
+    private async Task LoginWithPasskeyAsync()
+    {
+        try
+        {
+            // 1. Get assertion options from server
+            var optionsJson = await Users.GetPasskeyAssertionOptionsAsync();
+            if (string.IsNullOrWhiteSpace(optionsJson))
+                return;
+
+            // 2. Call browser WebAuthn API
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/passkey.js");
+            var assertionResponse = await module.InvokeAsync<object>("getPasskey", optionsJson);
+
+            if (assertionResponse == null)
+            {
+                Snackbar.Add("Passkey authentication was cancelled.", Severity.Warning);
+                return;
+            }
+
+            // 3. Send response to server to complete login and receive JWT
+            await Users.CompletePasskeyAssertionAsync(assertionResponse, model.RememberMe);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Passkey login failed: {ex.Message}", Severity.Error);
+        }
+    }
 }

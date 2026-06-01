@@ -1,0 +1,191 @@
+﻿@page "/organizational-units"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using OutsourceTracker.BusinessUnit.Divisions
+@using OutsourceTracker.Pages.Dialogs
+@using OutsourceTracker.Services.BusinessUnit.Divisions
+@inject IOrganizationalUnitService OrganizationalUnits
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 pb-4">
+    <div class="d-flex justify-space-between align-center mb-4">
+        <div>
+            <MudText Typo="Typo.h4">Organizational Units</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Business divisions or regions. Deleting a unit will also delete its accounts.
+            </MudText>
+        </div>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="ConfirmRecalculateCounts">
+                Recalculate Counts
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenCreateDialog">
+                New Unit
+            </MudButton>
+        </MudStack>
+    </div>
+
+    <MudTable Items="@units" Hover="true" Dense="true" Filter="FilterUnits"
+              SortLabel="Sort By" Loading="@isLoading">
+        <ToolBarContent>
+            <MudTextField @bind-Value="searchString" Placeholder="Search units..."
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true" Class="mt-0" />
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<OrganizationalUnit, object>(x => x.ShortCode)">Short Code</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<OrganizationalUnit, object>(x => x.Name)">Name</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<OrganizationalUnit, object>(x => x.TotalAccounts)">Accounts</MudTableSortLabel></MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Short Code">
+                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@context.ShortCode</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Name">@context.Name</MudTd>
+            <MudTd DataLabel="Accounts">
+                <MudBadge Content="@context.TotalAccounts" Color="Color.Info" Overlap="true">
+                    <MudIcon Icon="@Icons.Material.Filled.Business" />
+                </MudBadge>
+            </MudTd>
+            <MudTd DataLabel="Description">
+                <MudText Typo="Typo.body2" Class="text-truncate" Style="max-width: 300px;">
+                    @context.Description
+                </MudText>
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="() => OpenEditDialog(context)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="() => ConfirmDelete(context)" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private List<OrganizationalUnit> units = new();
+    private string searchString = "";
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUnits();
+    }
+
+    private async Task LoadUnits()
+    {
+        isLoading = true;
+        try
+        {
+            units = await OrganizationalUnits.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load organizational units: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private bool FilterUnits(OrganizationalUnit unit)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+
+        var term = searchString.Trim();
+        return unit.ShortCode.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+               unit.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+               unit.Description.Contains(term, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters<OrganizationalUnitDialog>();
+        var dialog = await DialogService.ShowAsync<OrganizationalUnitDialog>("Create Organizational Unit", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadUnits();
+        }
+    }
+
+    private async Task OpenEditDialog(OrganizationalUnit unit)
+    {
+        var parameters = new DialogParameters<OrganizationalUnitDialog>
+        {
+            { x => x.ExistingUnit, unit }
+        };
+
+        var dialog = await DialogService.ShowAsync<OrganizationalUnitDialog>("Edit Organizational Unit", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadUnits();
+        }
+    }
+
+    private async Task ConfirmDelete(OrganizationalUnit unit)
+    {
+        var warning = unit.TotalAccounts > 0
+            ? $"This will permanently delete the unit '{unit.ShortCode}' and all {unit.TotalAccounts} associated account(s)!"
+            : $"Delete organizational unit '{unit.ShortCode} - {unit.Name}'?";
+
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, warning },
+            { x => x.ButtonText, "Delete" },
+            { x => x.Color, Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Delete Organizational Unit?", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            bool success = await OrganizationalUnits.DeleteAsync(unit.Id);
+            if (success)
+            {
+                Snackbar.Add("Organizational Unit deleted.", Severity.Success);
+                await LoadUnits();
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete organizational unit.", Severity.Error);
+            }
+        }
+    }
+
+    private async Task ConfirmRecalculateCounts()
+    {
+        var parameters = new DialogParameters<ConfirmationDialog>
+        {
+            { x => x.ContentText, "Recalculate account counts for all Organizational Units?\n\nThis is a safe maintenance operation that corrects any drift in the displayed counts." },
+            { x => x.ButtonText, "Recalculate" },
+            { x => x.Color, Color.Primary }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("Recalculate Counts?", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            int updated = await OrganizationalUnits.RecalculateAccountCountsAsync();
+            Snackbar.Add($"Recalculation complete. {updated} organizational unit(s) updated.", Severity.Success);
+            await LoadUnits();
+        }
+    }
+}

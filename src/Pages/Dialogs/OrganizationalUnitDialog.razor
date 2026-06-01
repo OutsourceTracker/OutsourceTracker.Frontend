@@ -1,0 +1,109 @@
+﻿@using OutsourceTracker.BusinessUnit.Divisions
+@using OutsourceTracker.Services.BusinessUnit.Divisions
+@inject IOrganizationalUnitService OrganizationalUnits
+@inject ISnackbar Snackbar
+
+<MudDialog MaxWidth="MaxWidth.Small" FullWidth="true">
+    <DialogContent>
+        <MudText Typo="Typo.h6" GutterBottom="true">
+            @(IsEdit ? "Edit Organizational Unit" : "Create Organizational Unit")
+        </MudText>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12">
+                <MudTextField Label="Short Code" @bind-Value="Model.ShortCode" Required="true"
+                              MaxLength="10" HelperText="Unique code (e.g. CORP, WEST, EAST)" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField Label="Name" @bind-Value="Model.Name" Required="true"
+                              MaxLength="100" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField Label="Description" @bind-Value="Model.Description" Lines="3" />
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="Save" Disabled="@IsSaving">
+            @if (IsSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>@(IsEdit ? "Save Changes" : "Create")</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public OrganizationalUnit? ExistingUnit { get; set; }
+
+    private OrganizationalUnitCreateModel Model { get; set; } = new();
+    private bool IsEdit => ExistingUnit != null;
+    private bool IsSaving = false;
+
+    protected override void OnParametersSet()
+    {
+        if (ExistingUnit != null)
+        {
+            Model = new OrganizationalUnitCreateModel
+            {
+                ShortCode = ExistingUnit.ShortCode,
+                Name = ExistingUnit.Name,
+                Description = ExistingUnit.Description
+            };
+        }
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(Model.ShortCode) || string.IsNullOrWhiteSpace(Model.Name))
+        {
+            Snackbar.Add("Short Code and Name are required.", Severity.Warning);
+            return;
+        }
+
+        IsSaving = true;
+
+        try
+        {
+            if (IsEdit && ExistingUnit != null)
+            {
+                var updated = await OrganizationalUnits.UpdateAsync(ExistingUnit.Id, Model);
+                if (updated != null)
+                {
+                    Snackbar.Add("Organizational Unit updated successfully.", Severity.Success);
+                    MudDialog.Close(updated);
+                }
+                else
+                {
+                    Snackbar.Add("Failed to update organizational unit.", Severity.Error);
+                }
+            }
+            else
+            {
+                await OrganizationalUnits.CreateAsync(Model);
+                Snackbar.Add("Organizational Unit created successfully.", Severity.Success);
+                MudDialog.Close(true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Close();
+}

@@ -4,10 +4,14 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor;
 using MudBlazor.Services;
 using OutsourceTracker.Authentication;
+using OutsourceTracker.BusinessUnit.Accounts;
 using OutsourceTracker.Equipment.Trailers;
 using OutsourceTracker.Services;
+using OutsourceTracker.Services.BusinessUnit.Accounts;
+using OutsourceTracker.Services.BusinessUnit.Divisions;
 using OutsourceTracker.Services.Equipment;
 using OutsourceTracker.Services.Equipment.Trailers;
+using OutsourceTracker.Services.Zones;
 
 namespace OutsourceTracker
 {
@@ -51,6 +55,16 @@ namespace OutsourceTracker
             builder.Services.AddScoped<ClipboardService>();
             builder.Services.AddScoped<TrailerService>()
                 .AddScoped<IEquipmentService<TrailerModel>>(s => s.GetRequiredService<TrailerService>());
+
+            builder.Services.AddScoped<AccountService>()
+                .AddScoped<IAccountService>(s => s.GetRequiredService<AccountService>());
+
+            builder.Services.AddScoped<OrganizationalUnitService>()
+                .AddScoped<IOrganizationalUnitService>(s => s.GetRequiredService<OrganizationalUnitService>());
+
+            builder.Services.AddScoped<ZoneService>()
+                .AddScoped<IZoneService>(s => s.GetRequiredService<ZoneService>());
+
             builder.Services.AddMemoryCache();
             builder.Services.AddMudServices(config =>
             {
