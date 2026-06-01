@@ -9,7 +9,7 @@
 //
 // Calling loadGoogleMaps() here just ensures the shared promise is created
 // so that trailer-map.js and zone-boundary-map.js resolve instantly later.
-import('./js/google-maps-loader.js')
+import('./google-maps-loader.js')
     .then(module => {
         module.loadGoogleMaps().catch(() => {
             // Non-fatal — real usage will handle loading/retry
