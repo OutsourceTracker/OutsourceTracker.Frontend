@@ -32,6 +32,16 @@ RUN if [ -d "prebuilt-publish" ] && [ "$(ls -A prebuilt-publish)" ]; then \
         /p:BlazorEnableCompression=false; \
     fi
 
+# Verify that the critical Blazor WebAssembly loader exists (only checking webassembly, per requirements)
+RUN if ! ls /app/publish/wwwroot/_framework/blazor.webassembly*.js 1>/dev/null 2>&1; then \
+      echo "ERROR: blazor.webassembly.js (or fingerprinted version) was not found in /app/publish/wwwroot/_framework/"; \
+      echo "The published artifact is incomplete. Docker build cannot continue."; \
+      ls -la /app/publish/wwwroot/_framework/ 2>/dev/null || echo "No _framework directory at all"; \
+      exit 1; \
+    else \
+      echo "✓ Verified blazor.webassembly*.js exists in published output"; \
+    fi
+
 FROM nginx:alpine AS final
 WORKDIR /app
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html

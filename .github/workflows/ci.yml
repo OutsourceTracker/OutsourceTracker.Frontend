@@ -72,25 +72,38 @@ jobs:
 
       - name: Prepare prebuilt-publish for Dockerfile
         run: |
-          # The reusable workflow uploads the full publish output (which contains a wwwroot/ folder).
-          # The Dockerfile expects the *contents* of wwwroot directly under prebuilt-publish.
-          if [ -d "./src/prebuilt-publish/wwwroot" ]; then
-            echo "Flattening wwwroot contents into prebuilt-publish root..."
-            shopt -s dotglob nullglob
-            mv ./src/prebuilt-publish/wwwroot/* ./src/prebuilt-publish/ || true
-            rmdir ./src/prebuilt-publish/wwwroot 2>/dev/null || true
+          # The reusable workflow uploads the full publish output.
+          # This results in the structure:
+          #   prebuilt-publish/
+          #     wwwroot/
+          #       _framework/
+          #         blazor.webassembly.*.js
+          #         ...
+          #
+          # The Dockerfile does:
+          #   cp -r prebuilt-publish/* /app/publish/
+          # followed by
+          #   COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
+          #
+          # So we must preserve the wwwroot folder — do NOT flatten it.
+
+          echo "Structure under prebuilt-publish after download:"
+          ls -la ./src/prebuilt-publish/ 2>/dev/null || echo "(directory missing or empty)"
+
+          if [ -d "./src/prebuilt-publish/wwwroot/_framework" ]; then
+            echo "Contents of prebuilt-publish/wwwroot/_framework/:"
+            ls -la ./src/prebuilt-publish/wwwroot/_framework/ | head -20
+          else
+            echo "WARNING: No wwwroot/_framework directory found under prebuilt-publish"
           fi
 
-          echo "Contents of prebuilt-publish/_framework/:"
-          ls -la ./src/prebuilt-publish/_framework/ 2>/dev/null || echo "(no _framework directory found)"
-
-          # Verify the critical Blazor WebAssembly loader is present (handles fingerprinted names)
-          if ls ./src/prebuilt-publish/_framework/blazor.webassembly*.js 1>/dev/null 2>&1; then
+          # Verify the critical Blazor WebAssembly loader (user only wants this check, not boot.json)
+          if ls ./src/prebuilt-publish/wwwroot/_framework/blazor.webassembly*.js 1>/dev/null 2>&1; then
             echo "✓ blazor.webassembly.js (or fingerprinted variant) found in artifact"
           else
-            echo "✗ ERROR: blazor.webassembly.js not found in prebuilt-publish/_framework/"
-            echo "This will cause 404s in production."
-            ls -la ./src/prebuilt-publish/_framework/ || true
+            echo "✗ ERROR: blazor.webassembly.js not found under prebuilt-publish/wwwroot/_framework/"
+            echo "This will cause the Docker build to fail or the site to 404 at runtime."
+            ls -la ./src/prebuilt-publish/wwwroot/_framework/ 2>/dev/null || true
             exit 1
           fi
 
