@@ -4,7 +4,6 @@ ARG VERSION=0.0.1
 ARG ASSEMBLY_VERSION=0.0.1.0
 ARG FILE_VERSION=0.0.1.0
 ARG INFORMATIONAL_VERSION=0.0.1+unknown
-ARG ENABLE_BROTLI=true
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION
@@ -12,7 +11,6 @@ ARG VERSION
 ARG ASSEMBLY_VERSION
 ARG FILE_VERSION
 ARG INFORMATIONAL_VERSION
-ARG ENABLE_BROTLI
 WORKDIR /src
 
 COPY ["OutsourceTracker.Frontend.csproj", "."]
@@ -37,8 +35,7 @@ RUN if [ -d "prebuilt-publish" ] && [ "$(ls -A prebuilt-publish)" ]; then \
         /p:AssemblyVersion=${ASSEMBLY_VERSION} \
         /p:FileVersion=${FILE_VERSION} \
         /p:InformationalVersion=${INFORMATIONAL_VERSION} \
-        /p:AssemblyInformationalVersion=${INFORMATIONAL_VERSION} \
-        /p:BlazorWebAssemblyEnableCompression=true; \
+        /p:AssemblyInformationalVersion=${INFORMATIONAL_VERSION}; \
     fi
 
 # Verify that the critical Blazor WebAssembly loader exists (only checking webassembly, per requirements)
@@ -54,30 +51,15 @@ RUN if ! ls /app/publish/wwwroot/_framework/blazor.webassembly*.js 1>/dev/null 2
 # ============================================
 # Final runtime image
 # ============================================
-# Use standard nginx:alpine.
-# When ENABLE_BROTLI=true, we install the official Alpine brotli module package.
 FROM nginx:alpine AS final
-ARG ENABLE_BROTLI=true
 
 WORKDIR /app
 
 # Copy the published Blazor output
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
 
-# Install Brotli module when requested (Alpine package)
-RUN if [ "$ENABLE_BROTLI" = "true" ]; then \
-      apk add --no-cache nginx-mod-http-brotli; \
-    fi
-
-# Copy and process nginx config (enables Brotli directives only when requested)
-COPY nginx.conf /etc/nginx/nginx.conf.tmp
-RUN if [ "$ENABLE_BROTLI" = "true" ]; then \
-      sed -i 's/#BROTLION# //g' /etc/nginx/nginx.conf.tmp && \
-      mv /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf; \
-    else \
-      sed -i 's/#BROTLION# /# /g' /etc/nginx/nginx.conf.tmp && \
-      mv /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf; \
-    fi
+# Copy nginx config (gzip only)
+COPY nginx.conf /etc/nginx/nginx.conf
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
