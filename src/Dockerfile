@@ -29,7 +29,7 @@ RUN if [ -d "prebuilt-publish" ] && [ "$(ls -A prebuilt-publish)" ]; then \
         /p:FileVersion=${FILE_VERSION} \
         /p:InformationalVersion=${INFORMATIONAL_VERSION} \
         /p:AssemblyInformationalVersion=${INFORMATIONAL_VERSION} \
-        /p:BlazorEnableCompression=true; \
+        /p:BlazorEnableCompression=false; \
     fi
 
 FROM nginx:alpine AS final
