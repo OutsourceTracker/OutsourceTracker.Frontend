@@ -58,7 +58,8 @@ FROM alpine:3.19 AS brotli-builder
 ARG ENABLE_BROTLI=true
 
 RUN if [ "$ENABLE_BROTLI" = "true" ]; then \
-      apk add --no-cache \
+      set -eux; \
+      apk add --no-cache --virtual .brotli-build \
         git \
         gcc \
         g++ \
@@ -69,17 +70,19 @@ RUN if [ "$ENABLE_BROTLI" = "true" ]; then \
         linux-headers \
         openssl-dev \
         nginx-dev \
-        cmake && \
-      git clone --depth 1 https://github.com/google/ngx_brotli.git /ngx_brotli && \
-      cd /ngx_brotli && \
-      git submodule update --init --recursive && \
-      cd /ngx_brotli/deps/brotli && \
-      mkdir -p out && cd out && \
+        cmake; \
+      git clone --depth 1 https://github.com/google/ngx_brotli.git /ngx_brotli; \
+      cd /ngx_brotli && git submodule update --init --recursive; \
+      # Build the brotli library itself
+      cd /ngx_brotli/deps/brotli && mkdir -p out && cd out && \
       cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local .. && \
-      make && make install && \
+      make -j$(nproc) && make install; \
+      # Build the nginx dynamic modules
       cd /ngx_brotli && \
-      ./configure --with-compat --add-dynamic-module=/ngx_brotli && \
-      make modules; \
+      ./configure --with-compat --add-dynamic-module=. && \
+      make -j$(nproc) modules; \
+      # Cleanup
+      apk del .brotli-build; \
     else \
       mkdir -p /ngx_brotli/objs; \
     fi
