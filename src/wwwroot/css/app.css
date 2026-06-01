@@ -135,19 +135,27 @@ body {
 
 /* =============================================
    Trailer List Page - Responsive Split Layout
-   Desktop: constrained height with internal list scroll + fixed map
-   Mobile: natural flow so long lists can be scrolled via page body
+   Desktop (md+): the grid area fills remaining viewport height below AppBar.
+                 List gets internal scroll, map stays fixed height.
+   Mobile: everything flows naturally; long lists scroll the page body.
    ============================================= */
 
-/* Desktop (md and up): keep the original split behavior */
+/* Desktop / large screens: constrained split view */
 @media (min-width: 960px) {
     .trailer-page-container {
+        /* Give the page container a viewport-based height so flex children can size */
+        height: calc(100dvh - 72px); /* AppBar (~64px) + small buffer for margins */
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
     }
 
+    /* The MudGrid becomes the flex item that takes all remaining space */
     .trailer-split-grid {
+        flex: 1 1 0;
         min-height: 0;
         overflow: hidden;
+        width: 100%;
     }
 
     .trailer-list-column,
@@ -157,13 +165,20 @@ body {
 
     .trailer-list-card,
     .trailer-map-card {
+        height: 100%;
         overflow: hidden;
+    }
+
+    /* Ensure the internal list scroller works inside the constrained card */
+    .trailer-list-scroll {
+        overflow: auto;
     }
 }
 
-/* Mobile / stacked: let everything flow naturally so body can scroll */
+/* Mobile / stacked (< md): natural flow, page body scrolls */
 @media (max-width: 959px) {
     .trailer-page-container {
+        height: auto;
         overflow: visible;
     }
 
@@ -181,7 +196,6 @@ body {
         overflow: visible;
     }
 
-    /* Make the trailer list itself scrollable if very long, but page body also works */
     .trailer-list-scroll {
         max-height: none;
         overflow: visible;
