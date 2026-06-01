@@ -2,28 +2,30 @@
    Global Styles for OutsourceTracker.Frontend
    ============================================= */
 
-/* Root Application Container */
+/* Root Application Container - allow natural page flow and scrolling */
 #app {
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100dvh;
     width: 100%;
 }
 
-/* Ensure full height chain for layouts */
+/* Allow content to grow and body to scroll naturally on all devices */
+html, body {
+    min-height: 100dvh;
+}
+
 html, body, .mud-layout, .mud-layout-root {
-    height: 100% !important;
-    min-height: 100% !important;
+    /* Do NOT force height:100% or overflow:hidden here - it breaks mobile scrolling */
 }
 
+/* Do NOT force height on every MudContainer - simple list pages need to grow */
 .mud-container {
-    height: 100% !important;
+    /* height removed - was causing clipping on mobile */
 }
 
-/* Background gradient used in auth layout */
+/* Background gradient used in auth layout - keep min-height so it can grow */
 .mud-background-gradient {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    height: 100vh;
-    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 /* Optional: Smooth scrolling + better font rendering */
@@ -91,10 +93,9 @@ body {
     display: none;
 }
 
-/* Top-down MudBlazor scrolling support */
+/* MudMainContent - let it participate in normal document flow so pages can scroll */
 .mud-main-content {
-    height: 100% !important;
-    overflow: hidden;
+    /* Removed forced 100% height + hidden; content now flows and body scrolls */
 }
 
 /* Ensure list scrolling works */
@@ -130,4 +131,59 @@ body {
 .mud-theme-dark .zone-map-loading-overlay,
 [data-theme="dark"] .zone-map-loading-overlay {
     background: var(--mud-palette-surface, #1e1e1e);
+}
+
+/* =============================================
+   Trailer List Page - Responsive Split Layout
+   Desktop: constrained height with internal list scroll + fixed map
+   Mobile: natural flow so long lists can be scrolled via page body
+   ============================================= */
+
+/* Desktop (md and up): keep the original split behavior */
+@media (min-width: 960px) {
+    .trailer-page-container {
+        overflow: hidden;
+    }
+
+    .trailer-split-grid {
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .trailer-list-column,
+    .trailer-map-column {
+        height: 100%;
+    }
+
+    .trailer-list-card,
+    .trailer-map-card {
+        overflow: hidden;
+    }
+}
+
+/* Mobile / stacked: let everything flow naturally so body can scroll */
+@media (max-width: 959px) {
+    .trailer-page-container {
+        overflow: visible;
+    }
+
+    .trailer-split-grid {
+        overflow: visible;
+    }
+
+    .trailer-list-column,
+    .trailer-map-column {
+        height: auto !important;
+    }
+
+    .trailer-list-card,
+    .trailer-map-card {
+        overflow: visible;
+    }
+
+    /* Make the trailer list itself scrollable if very long, but page body also works */
+    .trailer-list-scroll {
+        max-height: none;
+        overflow: visible;
+    }
 }

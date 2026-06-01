@@ -19,91 +19,66 @@ namespace OutsourceTracker
     {
         public static async Task Main(string[] args)
         {
-            try
+            var builder = WebAssemblyHostBuilder.CreateDefault(args);
+            builder.RootComponents.Add<App>("#app");
+            builder.RootComponents.Add<HeadOutlet>("head::after");
+
+            builder.Services.AddHttpClient("API", client =>
             {
-                Log("=== Program.Main started ===");
-
-                var builder = WebAssemblyHostBuilder.CreateDefault(args);
-                Log("WebAssemblyHostBuilder created");
-
-                builder.RootComponents.Add<App>("#app");
-                builder.RootComponents.Add<HeadOutlet>("head::after");
-                Log("Root components registered");
-
-                // HTTP Clients
-                builder.Services.AddHttpClient("API", client =>
+                if (builder.HostEnvironment.IsDevelopment())
                 {
-                    var url = builder.HostEnvironment.IsDevelopment()
-                        ? "https://localhost:7253/"
-                        : "https://api.vandersluistrucking.com/";
-                    client.BaseAddress = new Uri(url);
-                });
-                Log("API HttpClient registered");
-
-                builder.Services.AddHttpClient("API_Secured", client =>
+                    client.BaseAddress = new Uri("https://localhost:7253/");
+                }
+                else
                 {
-                    var url = builder.HostEnvironment.IsDevelopment()
-                        ? "https://localhost:7253/"
-                        : "https://api.vandersluistrucking.com/";
-                    client.BaseAddress = new Uri(url);
-                })
-                .AddHttpMessageHandler<AuthHttpMessageHandler>();
-                Log("API_Secured HttpClient registered");
+                    client.BaseAddress = new Uri("https://api.vandersluistrucking.com/");
+                }
+            });
 
-                // Core services
-                builder.Services.AddScoped<UserService>();
-                builder.Services.AddScoped<AuthHttpMessageHandler>();
-                builder.Services.AddScoped<ITokenService, JwtTokenService>();
-                builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
-                builder.Services.AddScoped<ClipboardService>();
-                Log("Core services registered");
-
-                // Business services
-                builder.Services.AddScoped<TrailerService>()
-                    .AddScoped<IEquipmentService<TrailerModel>>(s => s.GetRequiredService<TrailerService>());
-                builder.Services.AddScoped<AccountService>()
-                    .AddScoped<IAccountService>(s => s.GetRequiredService<AccountService>());
-                builder.Services.AddScoped<OrganizationalUnitService>()
-                    .AddScoped<IOrganizationalUnitService>(s => s.GetRequiredService<OrganizationalUnitService>());
-                builder.Services.AddScoped<ZoneService>()
-                    .AddScoped<IZoneService>(s => s.GetRequiredService<ZoneService>());
-                Log("Business services registered");
-
-                builder.Services.AddMemoryCache();
-                builder.Services.AddMudServices(config =>
-                {
-                    config.SnackbarConfiguration.PositionClass = Defaults.Classes.Position.BottomCenter;
-                    config.SnackbarConfiguration.PreventDuplicates = true;
-                    config.SnackbarConfiguration.ShowCloseIcon = true;
-                    config.SnackbarConfiguration.MaxDisplayedSnackbars = 5;
-                    config.SnackbarConfiguration.VisibleStateDuration = 4000;
-                    config.SnackbarConfiguration.HideTransitionDuration = 300;
-                    config.SnackbarConfiguration.ShowTransitionDuration = 300;
-                });
-                builder.Services.AddAuthorizationCore();
-                Log("MudServices + Authorization registered");
-
-                Log("Building host...");
-                var host = builder.Build();
-                Log("Host built successfully");
-
-                Log("Starting RunAsync()...");
-                await host.RunAsync();
-            }
-            catch (Exception ex)
+            builder.Services.AddHttpClient("API_Secured", client =>
             {
-                Console.Error.WriteLine("=== FATAL STARTUP ERROR ===");
-                Console.Error.WriteLine(ex.ToString());
-                Console.Error.WriteLine("=== END FATAL ERROR ===");
+                if (builder.HostEnvironment.IsDevelopment())
+                {
+                    client.BaseAddress = new Uri("https://localhost:7253/");
+                }
+                else
+                {
+                    client.BaseAddress = new Uri("https://api.vandersluistrucking.com/");
+                }
+            })
+            .AddHttpMessageHandler<AuthHttpMessageHandler>();
 
-                throw;
-            }
-        }
+            builder.Services.AddScoped<UserService>();
+            builder.Services.AddScoped<AuthHttpMessageHandler>();
+            builder.Services.AddScoped<ITokenService, JwtTokenService>();
+            builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
+            builder.Services.AddScoped<ClipboardService>();
+            builder.Services.AddScoped<TrailerService>()
+                .AddScoped<IEquipmentService<TrailerModel>>(s => s.GetRequiredService<TrailerService>());
 
-        private static void Log(string message)
-        {
-            var ts = DateTime.UtcNow.ToString("HH:mm:ss.fff");
-            Console.WriteLine($"[Startup {ts}] {message}");
+            builder.Services.AddScoped<AccountService>()
+                .AddScoped<IAccountService>(s => s.GetRequiredService<AccountService>());
+
+            builder.Services.AddScoped<OrganizationalUnitService>()
+                .AddScoped<IOrganizationalUnitService>(s => s.GetRequiredService<OrganizationalUnitService>());
+
+            builder.Services.AddScoped<ZoneService>()
+                .AddScoped<IZoneService>(s => s.GetRequiredService<ZoneService>());
+
+            builder.Services.AddMemoryCache();
+            builder.Services.AddMudServices(config =>
+            {
+                config.SnackbarConfiguration.PositionClass = Defaults.Classes.Position.BottomCenter;
+                config.SnackbarConfiguration.PreventDuplicates = true;
+                config.SnackbarConfiguration.ShowCloseIcon = true;
+                config.SnackbarConfiguration.MaxDisplayedSnackbars = 5;
+                config.SnackbarConfiguration.VisibleStateDuration = 4000;
+                config.SnackbarConfiguration.HideTransitionDuration = 300;
+                config.SnackbarConfiguration.ShowTransitionDuration = 300;
+            });
+            builder.Services.AddAuthorizationCore();
+
+            await builder.Build().RunAsync();
         }
     }
 }

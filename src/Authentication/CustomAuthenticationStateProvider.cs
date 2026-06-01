@@ -16,14 +16,11 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        Console.WriteLine("[Auth] GetAuthenticationStateAsync called");
-
         using var scope = _logger.BeginScope("Getting authentication state");
 
         try
         {
             var token = await _tokenService.GetTokenAsync();
-            Console.WriteLine($"[Auth] Token retrieved. Length = {token?.Length ?? 0}");
 
             if (string.IsNullOrWhiteSpace(token))
             {
@@ -53,7 +50,6 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in authentication state");
-            Console.WriteLine($"[Auth] EXCEPTION in GetAuthenticationStateAsync: {ex.Message}");
             return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
         }
     }
