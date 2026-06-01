@@ -61,16 +61,22 @@ RUN if [ "$ENABLE_BROTLI" = "true" ]; then \
       apk add --no-cache \
         git \
         gcc \
+        g++ \
         make \
         musl-dev \
         pcre-dev \
         zlib-dev \
         linux-headers \
         openssl-dev \
-        nginx-dev && \
+        nginx-dev \
+        cmake && \
       git clone --depth 1 https://github.com/google/ngx_brotli.git /ngx_brotli && \
       cd /ngx_brotli && \
       git submodule update --init --recursive && \
+      cd /ngx_brotli/deps/brotli && \
+      mkdir -p out && cd out && \
+      cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local .. && \
+      make && make install && \
       cd /ngx_brotli && \
       ./configure --with-compat --add-dynamic-module=/ngx_brotli && \
       make modules; \
@@ -84,8 +90,8 @@ RUN if [ "$ENABLE_BROTLI" = "true" ]; then \
 FROM nginx:alpine AS final
 ARG ENABLE_BROTLI=true
 
-# Copy brotli modules only if enabled (the directory will exist but may be empty)
-COPY --from=brotli-builder /ngx_brotli/objs/ /etc/nginx/modules/ 2>/dev/null || true
+# Copy brotli modules (only present when ENABLE_BROTLI=true)
+COPY --from=brotli-builder /ngx_brotli/objs/*.so /etc/nginx/modules/ 2>/dev/null || true
 
 WORKDIR /app
 
