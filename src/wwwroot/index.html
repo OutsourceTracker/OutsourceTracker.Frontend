@@ -78,10 +78,6 @@
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
 
     <!-- Blazor -->
-    <!-- 
-      Must use type="module" so the browser respects the importmap 
-      that maps the unhashed name to the fingerprinted blazor.webassembly.*.js
-    -->
-    <script type="module" src="_framework/blazor.webassembly.js"></script>
+    <script type="module" src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
 </body>
 </html>
