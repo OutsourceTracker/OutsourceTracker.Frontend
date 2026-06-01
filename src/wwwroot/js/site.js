@@ -1,6 +1,17 @@
 ﻿// =============================================
-// Site-wide early initialization
+// Site-wide early initialization + Diagnostics
 // =============================================
+
+// Expose a global helper so C# can update the loading screen with status messages.
+// This is very useful for diagnosing startup hangs.
+window.updateLoadingStatus = function (message) {
+    console.log('[Blazor Startup] ' + message);
+
+    const el = document.getElementById('loading-status');
+    if (el) {
+        el.textContent = message;
+    }
+};
 
 // Pre-warm the Google Maps readiness promise.
 // The actual Maps script is now loaded via a static <script async defer> tag
