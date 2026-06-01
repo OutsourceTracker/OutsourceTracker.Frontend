@@ -54,9 +54,11 @@ RUN if ! ls /app/publish/wwwroot/_framework/blazor.webassembly*.js 1>/dev/null 2
 # ============================================
 # Final runtime image
 # ============================================
-# When Brotli is enabled, we use a pre-built nginx image (fabiocicerchia/nginx-lua:alpine)
-# that already ships with the Brotli modules compiled in. This avoids the flaky
-# source compilation of ngx_brotli during CI builds.
+# We use fabiocicerchia/nginx-lua:alpine because it ships with the
+# Brotli (ngx_brotli) modules pre-compiled. This avoids the flaky
+# source compilation we had before.
+# The ENABLE_BROTLI build arg only controls whether the Brotli
+# directives are active in the generated nginx.conf.
 FROM fabiocicerchia/nginx-lua:alpine AS final
 ARG ENABLE_BROTLI=true
 
@@ -65,15 +67,12 @@ WORKDIR /app
 # Copy the published Blazor output
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
 
-# Copy nginx config and enable/disable Brotli directives based on build arg.
-# The image already has Brotli modules at /usr/lib/nginx/modules/
+# Copy and process nginx config (enables Brotli directives only when requested)
 COPY nginx.conf /etc/nginx/nginx.conf.tmp
 RUN if [ "$ENABLE_BROTLI" = "true" ]; then \
-      # Enable Brotli lines (remove the marker prefix)
       sed -i 's/#BROTLION# //g' /etc/nginx/nginx.conf.tmp && \
       mv /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf; \
     else \
-      # Disable Brotli (turn the marker into a regular comment)
       sed -i 's/#BROTLION# /# /g' /etc/nginx/nginx.conf.tmp && \
       mv /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf; \
     fi
