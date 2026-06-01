@@ -70,6 +70,30 @@ jobs:
           name: wwwroot
           path: ./src/prebuilt-publish
 
+      - name: Prepare prebuilt-publish for Dockerfile
+        run: |
+          # The reusable workflow uploads the full publish output (which contains a wwwroot/ folder).
+          # The Dockerfile expects the *contents* of wwwroot directly under prebuilt-publish.
+          if [ -d "./src/prebuilt-publish/wwwroot" ]; then
+            echo "Flattening wwwroot contents into prebuilt-publish root..."
+            shopt -s dotglob nullglob
+            mv ./src/prebuilt-publish/wwwroot/* ./src/prebuilt-publish/ || true
+            rmdir ./src/prebuilt-publish/wwwroot 2>/dev/null || true
+          fi
+
+          echo "Contents of prebuilt-publish/_framework/:"
+          ls -la ./src/prebuilt-publish/_framework/ 2>/dev/null || echo "(no _framework directory found)"
+
+          # Verify the critical Blazor WebAssembly loader is present (handles fingerprinted names)
+          if ls ./src/prebuilt-publish/_framework/blazor.webassembly*.js 1>/dev/null 2>&1; then
+            echo "✓ blazor.webassembly.js (or fingerprinted variant) found in artifact"
+          else
+            echo "✗ ERROR: blazor.webassembly.js not found in prebuilt-publish/_framework/"
+            echo "This will cause 404s in production."
+            ls -la ./src/prebuilt-publish/_framework/ || true
+            exit 1
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
