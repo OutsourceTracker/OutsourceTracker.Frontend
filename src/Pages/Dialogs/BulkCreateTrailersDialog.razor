@@ -1,8 +1,11 @@
-﻿@using OutsourceTracker.Equipment.Trailers
+﻿@using OutsourceTracker.BusinessUnit.Accounts
+@using OutsourceTracker.Equipment.Trailers
 @using OutsourceTracker.Services
+@using OutsourceTracker.Services.BusinessUnit.Accounts
 @using OutsourceTracker.Services.DataModels
 @using OutsourceTracker.Services.Equipment
 @inject IEquipmentService<TrailerModel> Trailers
+@inject IAccountService AccountsService
 @inject ClipboardService Clipboard
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -14,7 +17,26 @@
 
         @if (!HasResults)
         {
-            <MudText Typo="Typo.body2" Class="mb-4">Add as many trailers as needed. Paste tab-separated data from Excel/Sheets (Prefix, Name, Type) or click "Add Row".</MudText>
+            <MudText Typo="Typo.body2" Class="mb-2">Add as many trailers as needed. Paste tab-separated data from Excel/Sheets (Prefix, Name, Type, [optional Account shortcode/name]) or click "Add Row". Select a default account below (applies to new rows; can override per-row or use Apply button).</MudText>
+
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-3">
+                <MudText Typo="Typo.caption">Default account:</MudText>
+                <MudSelect T="Guid?" @bind-Value="defaultAccountId"
+                           Placeholder="— None —" Clearable="true"
+                           ToStringFunc="@(guid => GetAccountDisplayName(guid))"
+                           Variant="Variant.Outlined" Dense="true" Style="min-width: 220px;"
+                           SearchBox="true" SearchBoxPlaceholder="Search accounts...">
+                    <MudSelectItem T="Guid?" Value="@((Guid?)null)">— None —</MudSelectItem>
+                    @foreach (var acc in allAccounts)
+                    {
+                        <MudSelectItem T="Guid?" Value="@((Guid?)acc.Id)">@acc</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                           OnClick="ApplyDefaultToAllRows" Disabled="@(!defaultAccountId.HasValue || items.Count == 0)">
+                    Apply to all rows
+                </MudButton>
+            </MudStack>
 
             <MudTable Items="@items" Hover="true" Dense="true" Class="mb-4">
                 <ToolBarContent>
@@ -24,6 +46,7 @@
                     <MudTh>Prefix</MudTh>
                     <MudTh>Name/Number</MudTh>
                     <MudTh>Type</MudTh>
+                    <MudTh>Account</MudTh>
                     <MudTh></MudTh>
                 </HeaderContent>
                 <RowTemplate>
@@ -39,6 +62,17 @@
                             <MudSelectItem Value="TrailerType.Reefer">Reefer</MudSelectItem>
                             <MudSelectItem Value="TrailerType.Flatbed">Flatbed</MudSelectItem>
                             <MudSelectItem Value="TrailerType.Conestoga">Conestoga</MudSelectItem>
+                        </MudSelect>
+                    </MudTd>
+                    <MudTd>
+                        <MudSelect T="Guid?" @bind-Value="context.AccountId" Placeholder="—" Clearable="true"
+                                   ToStringFunc="@(g => GetAccountDisplayName(g))"
+                                   Variant="Variant.Outlined" Dense="true" Style="min-width: 160px;">
+                            <MudSelectItem T="Guid?" Value="@((Guid?)null)">— None —</MudSelectItem>
+                            @foreach (var acc in allAccounts)
+                            {
+                                <MudSelectItem T="Guid?" Value="@((Guid?)acc.Id)">@acc</MudSelectItem>
+                            }
                         </MudSelect>
                     </MudTd>
                     <MudTd>
@@ -103,13 +137,30 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
 
+    /// <summary>
+    /// Optional suggested account ID (e.g. from active filter in parent list). Will be used as default for pasted/added rows.
+    /// </summary>
+    [Parameter] public Guid? SuggestedAccountId { get; set; }
+
     private List<TrailerCreateRequest> items = new() { new TrailerCreateRequest() };
     private BulkCreateResult<TrailerModel>? BulkResult;
     private bool IsProcessing = false;
 
+    private List<OrganizationalAccount> allAccounts = new();
+    private Dictionary<Guid, OrganizationalAccount> accountLookup = new();
+    private Guid? defaultAccountId = null;
+
     private bool HasResults => BulkResult != null;
 
-    private void AddRow() => items.Add(new TrailerCreateRequest());
+    private void AddRow()
+    {
+        var req = new TrailerCreateRequest();
+        if (defaultAccountId.HasValue)
+        {
+            req.AccountId = defaultAccountId;
+        }
+        items.Add(req);
+    }
 
     private void RemoveRow(TrailerCreateRequest item)
     {
@@ -120,7 +171,66 @@
     protected override async Task OnParametersSetAsync()
     {
         await base.OnParametersSetAsync();
+        await LoadAccounts();
+
+        if (SuggestedAccountId.HasValue && allAccounts.Any(a => a.Id == SuggestedAccountId.Value))
+        {
+            defaultAccountId = SuggestedAccountId;
+            ApplyDefaultToInitialItems();
+        }
+
         await ProcessClipboardData();
+    }
+
+    private async Task LoadAccounts()
+    {
+        try
+        {
+            allAccounts = await AccountsService.GetAllAsync();
+            accountLookup = allAccounts.ToDictionary(a => a.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogWarning(ex, "Failed to load accounts in bulk create dialog.");
+            allAccounts = new();
+            accountLookup = new();
+        }
+        StateHasChanged();
+    }
+
+    private void ApplyDefaultToInitialItems()
+    {
+        if (defaultAccountId.HasValue && items.Count > 0)
+        {
+            foreach (var item in items)
+            {
+                item.AccountId = defaultAccountId;
+            }
+        }
+    }
+
+    private void ApplyDefaultToAllRows()
+    {
+        if (!defaultAccountId.HasValue) return;
+
+        foreach (var item in items)
+        {
+            item.AccountId = defaultAccountId;
+        }
+        StateHasChanged();
+    }
+
+    private string GetAccountDisplayName(Guid? guid)
+    {
+        if (!guid.HasValue || guid.Value == Guid.Empty)
+            return "—";
+
+        if (accountLookup.TryGetValue(guid.Value, out var acc))
+        {
+            return acc.ToString() ?? acc.Name ?? guid.ToString();
+        }
+
+        return guid.Value.ToString();
     }
 
     private async Task ProcessClipboardData()
@@ -142,11 +252,28 @@
                 string name = valuesSplit[1].Trim();
                 string typeStr = valuesSplit.Length > 2 ? valuesSplit[2].Trim() : "Van";
 
+                // Optional 4th column: account shortcode or name fragment
+                Guid? acctId = null;
+                if (valuesSplit.Length > 3)
+                {
+                    string acctStr = valuesSplit[3].Trim();
+                    if (!string.IsNullOrWhiteSpace(acctStr))
+                    {
+                        var match = allAccounts.FirstOrDefault(a =>
+                            (a.ShortCode != null && a.ShortCode.Equals(acctStr, StringComparison.OrdinalIgnoreCase)) ||
+                            (a.Name != null && a.Name.Contains(acctStr, StringComparison.OrdinalIgnoreCase)) ||
+                            a.ToString().Contains(acctStr, StringComparison.OrdinalIgnoreCase));
+                        if (match != null)
+                            acctId = match.Id;
+                    }
+                }
+
                 TrailerCreateRequest t = new()
                 {
                     Prefix = prefix.ToUpperInvariant(),
                     Name = name.ToUpperInvariant(),
-                    Type = Enum.TryParse<TrailerType>(typeStr, true, out var type) ? type : TrailerType.Van
+                    Type = Enum.TryParse<TrailerType>(typeStr, true, out var type) ? type : TrailerType.Van,
+                    AccountId = acctId ?? defaultAccountId
                 };
 
                 // Pad name with leading zeros to 6 chars (existing behavior)

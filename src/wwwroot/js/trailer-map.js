@@ -6,6 +6,12 @@ let dotNetHelper = null;
 let zonePolygons = [];
 let zoneLabels = [];
 
+// Current user location (non-interactive, auto-updating)
+let currentLocationMarker = null;
+let currentLocationAccuracyCircle = null;
+let geolocationWatchId = null;
+let hasAutoCenteredOnUser = false;  // one-time, only for the main trailer live map
+
 export async function initMap(elementId, centerLat, centerLng, zoomLevel, dotNetRef) {
     dotNetHelper = dotNetRef;
 
@@ -201,6 +207,123 @@ export function centerOnLocation(lat, lng, zoom = 12) {
     if (mapInstance) {
         mapInstance.setCenter({ lat, lng });
         mapInstance.setZoom(zoom);
+    }
+}
+
+// ==================== CURRENT USER LOCATION (non-interactive, auto-updating) ====================
+
+export function startUserLocationTracking() {
+    if (!navigator.geolocation) {
+        console.warn('Geolocation is not supported by this browser.');
+        return;
+    }
+    if (geolocationWatchId !== null) {
+        // already active
+        return;
+    }
+
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 5000
+    };
+
+    geolocationWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const acc = pos.coords.accuracy || 0;
+            updateCurrentLocationMarker(lat, lng, acc);
+        },
+        (err) => {
+            // Non-fatal: user may have denied, or GPS unavailable. Just log.
+            console.debug('Geolocation watch error (non-fatal):', err.code, err.message);
+        },
+        options
+    );
+}
+
+export function stopUserLocationTracking() {
+    if (geolocationWatchId !== null) {
+        navigator.geolocation.clearWatch(geolocationWatchId);
+        geolocationWatchId = null;
+    }
+    removeCurrentLocationMarker();
+}
+
+function updateCurrentLocationMarker(lat, lng, accuracyMeters = 0) {
+    if (!mapInstance) return;
+
+    const position = { lat, lng };
+
+    // Create or update the "you are here" dot (AdvancedMarker for consistency)
+    if (!currentLocationMarker) {
+        // Custom DOM content: blue dot, completely non-interactive
+        const dot = document.createElement('div');
+        dot.style.cssText = `
+            width: 14px;
+            height: 14px;
+            background-color: #1a73e8;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.35);
+            pointer-events: none;
+            user-select: none;
+        `;
+
+        currentLocationMarker = new google.maps.marker.AdvancedMarkerElement({
+            position: position,
+            map: mapInstance,
+            content: dot,
+            title: 'Your current location',
+            zIndex: 2000
+        });
+        // Intentionally no click/drag listeners attached.
+    } else {
+        currentLocationMarker.position = position;
+    }
+
+    // One-time auto center for the "Live Location Map" view (does not apply to zone editor).
+    // Only happens the very first time we receive a position after page load.
+    if (!hasAutoCenteredOnUser && mapInstance) {
+        mapInstance.setCenter(position);
+        mapInstance.setZoom(13);
+        hasAutoCenteredOnUser = true;
+    }
+
+    // Accuracy circle (visual only, never clickable)
+    if (accuracyMeters > 5) {  // ignore tiny/meaningless accuracy
+        if (!currentLocationAccuracyCircle) {
+            currentLocationAccuracyCircle = new google.maps.Circle({
+                strokeColor: '#1a73e8',
+                strokeOpacity: 0.35,
+                strokeWeight: 1,
+                fillColor: '#1a73e8',
+                fillOpacity: 0.12,
+                map: mapInstance,
+                center: position,
+                radius: accuracyMeters,
+                clickable: false,
+                zIndex: 1999
+            });
+        } else {
+            currentLocationAccuracyCircle.setCenter(position);
+            currentLocationAccuracyCircle.setRadius(accuracyMeters);
+        }
+    } else if (currentLocationAccuracyCircle) {
+        currentLocationAccuracyCircle.setMap(null);
+        currentLocationAccuracyCircle = null;
+    }
+}
+
+function removeCurrentLocationMarker() {
+    if (currentLocationMarker) {
+        currentLocationMarker.map = null;
+        currentLocationMarker = null;
+    }
+    if (currentLocationAccuracyCircle) {
+        currentLocationAccuracyCircle.setMap(null);
+        currentLocationAccuracyCircle = null;
     }
 }
 

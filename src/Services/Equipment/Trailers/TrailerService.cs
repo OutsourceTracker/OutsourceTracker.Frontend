@@ -5,6 +5,7 @@ using OutsourceTracker.Equipment.Trailers;
 using OutsourceTracker.Services.DataModels;
 using OutsourceTracker.Services.ModelService;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace OutsourceTracker.Services.Equipment.Trailers;
 
@@ -258,13 +259,51 @@ public class TrailerService : IEquipmentService<TrailerModel>
         using HttpResponseMessage response = await Http.SendAsync(request);
         if (response.IsSuccessStatusCode)
         {
-            EquipmentLocationUpdateResponse<Guid>? update = await response.Content.ReadFromJsonAsync<EquipmentLocationUpdateResponse<Guid>>();
+            // Read raw JSON so we can extract "updatedTrailers" (extra data sent by updated backend for zone etc.)
+            // even if the client-side model class (from current Common package) doesn't declare the property yet.
+            var json = await response.Content.ReadAsStringAsync();
+            EquipmentLocationUpdateResponse<Guid>? update = null;
+            List<TrailerModel> updatedFromResponse = new();
+
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                update = JsonSerializer.Deserialize<EquipmentLocationUpdateResponse<Guid>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (update != null)
+                {
+                    // Try to parse the extra updatedTrailers array from the response JSON (populated by backend after spot+zone lookup)
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(json);
+                        if (doc.RootElement.TryGetProperty("updatedTrailers", out var updatedProp) && updatedProp.ValueKind == JsonValueKind.Array)
+                        {
+                            updatedFromResponse = JsonSerializer.Deserialize<List<TrailerModel>>(updatedProp.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+                            foreach (var tm in updatedFromResponse)
+                            {
+                                SetOrUpdateCache(tm);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogDebug(ex, "Failed to parse updatedTrailers extra from spot response JSON; will fallback.");
+                    }
+                }
+            }
 
             if (update != null)
             {
-                foreach (var successfulId in update.SuccessfulTrailers)
+                if (updatedFromResponse.Count > 0)
                 {
-                    TrailerModel? trailer = await GetAsync(successfulId, ignoreCache: true);
+                    // Data came via the spot response JSON (preferred, has fresh zone data etc.)
+                }
+                else
+                {
+                    // Fallback: refetch individuals to refresh cache (older backend response shape)
+                    foreach (var successfulId in update.SuccessfulTrailers)
+                    {
+                        TrailerModel? trailer = await GetAsync(successfulId, ignoreCache: true);
+                    }
                 }
 
                 return update;

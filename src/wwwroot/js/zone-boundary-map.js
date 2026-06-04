@@ -13,6 +13,15 @@ let trailerPoolMarkers = [];
 let boundaryPolygon = null;
 let activeMode = 'none'; // 'boundary' | 'entry' | 'exit' | 'dock' | 'trailerpool' | 'none'
 
+// Current user location (purely visual reference; must never interfere with drawing/clicks/drags)
+let currentLocationMarker = null;
+let currentLocationAccuracyCircle = null;
+let geolocationWatchId = null;
+let lastKnownUserLocation = null;  // {lat, lng, accuracy} - kept in sync with the visual marker
+
+let hasAutoFocusedOnUser = false;
+let usedDefaultCenterForInit = false;
+
 const COLORS = {
     boundary: '#3b82f6',     // blue
     entry: '#22c55e',        // green
@@ -24,6 +33,10 @@ const COLORS = {
 export async function initBoundaryMap(elementId, centerLat, centerLng, zoomLevel, dotNetRef) {
     dotNetHelper = dotNetRef;
 
+    // Reset per-open state so focus logic applies fresh each time the boundary map dialog is opened.
+    hasAutoFocusedOnUser = false;
+    usedDefaultCenterForInit = false;
+
     try {
         const { loadGoogleMaps, getMapId } = await import('./google-maps-loader.js');
         await loadGoogleMaps();
@@ -34,8 +47,14 @@ export async function initBoundaryMap(elementId, centerLat, centerLng, zoomLevel
             return false;
         }
 
+        const defaultLat = 39.8283;
+        const defaultLng = -98.5795;
+        const initialLat = centerLat || defaultLat;
+        const initialLng = centerLng || defaultLng;
+        usedDefaultCenterForInit = (Math.abs(initialLat - defaultLat) < 0.5 && Math.abs(initialLng - defaultLng) < 0.5);
+
         mapInstance = new google.maps.Map(mapElement, {
-            center: { lat: centerLat || 39.8283, lng: centerLng || -98.5795 },
+            center: { lat: initialLat, lng: initialLng },
             zoom: zoomLevel || 8,
             mapTypeControl: true,
             streetViewControl: false,
@@ -43,6 +62,21 @@ export async function initBoundaryMap(elementId, centerLat, centerLng, zoomLevel
             clickableIcons: false,
             mapId: getMapId()   // Required for AdvancedMarkerElement
         });
+
+        // If we already have a last known location (e.g. user clicked "add current" button
+        // before the map finished initializing), place the marker immediately.
+        if (lastKnownUserLocation) {
+            updateCurrentLocationMarker(
+                lastKnownUserLocation.lat,
+                lastKnownUserLocation.lng,
+                lastKnownUserLocation.accuracy || 0
+            );
+            // If we were using the default "nowhere" center (typical for new zone), focus on user loc.
+            if (usedDefaultCenterForInit && !hasAutoFocusedOnUser) {
+                centerOnPoint(lastKnownUserLocation.lat, lastKnownUserLocation.lng, 15);
+                hasAutoFocusedOnUser = true;
+            }
+        }
     } catch (err) {
         console.error('Failed to load Google Maps API:', err);
         return false;
@@ -254,4 +288,172 @@ export function centerOnPoint(lat, lng, zoom = 15) {
 export function refreshMap() {
     // Currently loadPoints is the main way to refresh
     console.log('refreshMap called (no-op, use loadPoints)');
+}
+
+// ==================== CURRENT USER LOCATION (non-interactive, auto-updating) ====================
+// IMPORTANT: This marker must never be clickable, draggable, or capture map clicks.
+// It must not affect border creation / point placement in any drawing mode.
+
+export function startUserLocationTracking() {
+    if (!navigator.geolocation) {
+        console.warn('Geolocation is not supported by this browser.');
+        return;
+    }
+    if (geolocationWatchId !== null) {
+        return; // already tracking
+    }
+
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 5000
+    };
+
+    geolocationWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const acc = pos.coords.accuracy || 0;
+            updateCurrentLocationMarker(lat, lng, acc);
+        },
+        (err) => {
+            console.debug('Geolocation watch error (non-fatal for zone editor):', err.code, err.message);
+        },
+        options
+    );
+}
+
+export function stopUserLocationTracking() {
+    if (geolocationWatchId !== null) {
+        navigator.geolocation.clearWatch(geolocationWatchId);
+        geolocationWatchId = null;
+    }
+    removeCurrentLocationMarker();
+}
+
+function updateCurrentLocationMarker(lat, lng, accuracyMeters = 0) {
+    if (!mapInstance) return;
+
+    const position = { lat, lng };
+
+    if (!currentLocationMarker) {
+        // Distinct blue "you are here" dot. pointer-events:none + no listeners = completely inert.
+        const dot = document.createElement('div');
+        dot.style.cssText = `
+            width: 14px;
+            height: 14px;
+            background-color: #1a73e8;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.35);
+            pointer-events: none;
+            user-select: none;
+        `;
+
+        currentLocationMarker = new google.maps.marker.AdvancedMarkerElement({
+            position: position,
+            map: mapInstance,
+            content: dot,
+            title: 'Your current location',
+            zIndex: 2000
+        });
+        // Deliberately: no gmp-click, no drag listeners, no title click behavior.
+    } else {
+        currentLocationMarker.position = position;
+    }
+
+    lastKnownUserLocation = { lat, lng, accuracy: accuracyMeters };
+
+    // Auto focus the view to user's current location the *first* time we receive a position
+    // after the map opened, *but only* if the initial center was the default (i.e. no
+    // existing points were provided for a new boundary). This ensures "focus to users
+    // current location when it is opened" without disrupting editors for existing zones.
+    if (!hasAutoFocusedOnUser && usedDefaultCenterForInit && mapInstance) {
+        centerOnPoint(lat, lng, 15);
+        hasAutoFocusedOnUser = true;
+    }
+
+    // Accuracy halo - visual only
+    if (accuracyMeters > 5) {
+        if (!currentLocationAccuracyCircle) {
+            currentLocationAccuracyCircle = new google.maps.Circle({
+                strokeColor: '#1a73e8',
+                strokeOpacity: 0.3,
+                strokeWeight: 1,
+                fillColor: '#1a73e8',
+                fillOpacity: 0.1,
+                map: mapInstance,
+                center: position,
+                radius: accuracyMeters,
+                clickable: false,
+                zIndex: 1999
+            });
+        } else {
+            currentLocationAccuracyCircle.setCenter(position);
+            currentLocationAccuracyCircle.setRadius(accuracyMeters);
+        }
+    } else if (currentLocationAccuracyCircle) {
+        currentLocationAccuracyCircle.setMap(null);
+        currentLocationAccuracyCircle = null;
+    }
+}
+
+function removeCurrentLocationMarker() {
+    if (currentLocationMarker) {
+        currentLocationMarker.map = null;
+        currentLocationMarker = null;
+    }
+    if (currentLocationAccuracyCircle) {
+        currentLocationAccuracyCircle.setMap(null);
+        currentLocationAccuracyCircle = null;
+    }
+    lastKnownUserLocation = null;
+    hasAutoFocusedOnUser = false;
+    usedDefaultCenterForInit = false;
+}
+
+// Returns the last known user location (from the live watch or a fresh one-shot).
+// This is preferred over separate geolocation calls because the map is already
+// tracking it for the visual marker, and it keeps everything in sync.
+export function getCurrentUserLocation() {
+    if (lastKnownUserLocation) {
+        return { ...lastKnownUserLocation };
+    }
+    return null;
+}
+
+export async function getCurrentUserLocationAsync() {
+    const known = getCurrentUserLocation();
+    if (known) return known;
+
+    if (!navigator.geolocation) {
+        return null;
+    }
+
+    return await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const loc = {
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy || 0
+                };
+                lastKnownUserLocation = loc;
+                // Update the visual marker immediately so it appears/refreshes
+                try {
+                    updateCurrentLocationMarker(loc.lat, loc.lng, loc.accuracy);
+                } catch (e) { /* ignore */ }
+                resolve({ ...loc });
+            },
+            (err) => {
+                console.debug('One-shot geolocation for add-pin failed:', err);
+                resolve(null);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+        );
+    });
 }

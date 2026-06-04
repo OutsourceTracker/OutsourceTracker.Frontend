@@ -7,10 +7,13 @@
 
 @using System.Text.Json
 
+@implements IAsyncDisposable
+
 <MudDialog>
     <DialogContent>
         <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
             Click the map to add points. Switch modes below to draw the boundary or place entry/exit/dock/trailer pool points. Drag markers to move them.
+            A blue marker shows your current location (for reference only — it is not clickable and does not interfere with drawing).
         </MudText>
 
         <!-- Google Map -->
@@ -283,25 +286,52 @@
     private async Task AddCurrentLocationToBoundary()
     {
         IsGettingLocation = true;
+        StateHasChanged();
+
         try
         {
-            var position = await JS.InvokeAsync<GeolocationPosition>("navigator.geolocation.getCurrentPositionAsync");
-            if (position?.Coords != null)
+            // Prefer the boundary map's live current location (already being tracked
+            // for the visual non-interactive marker). Falls back to a fresh one-shot
+            // geolocation inside the JS if no fix yet.
+            // Lazily import the map module if the map hasn't finished initializing yet,
+            // so the "add current location" button works immediately.
+            CurrentUserLocation? loc = null;
+            if (boundaryMapModule == null)
             {
-                var newPoint = new Vector2(position.Coords.Latitude, position.Coords.Longitude);
-                BoundryPoints.Add(newPoint);
-                Snackbar.Add("Added current GPS location to boundary.", Severity.Success);
-                StateHasChanged();
-                await SyncMapFromLists();
+                boundaryMapModule = await JS.InvokeAsync<IJSObjectReference>(
+                    "import", "./js/zone-boundary-map.js");
             }
+
+            if (boundaryMapModule != null)
+            {
+                // Make sure the live location tracker (and thus the visual marker) is running.
+                // Safe and idempotent.
+                _ = boundaryMapModule.InvokeVoidAsync("startUserLocationTracking");
+
+                loc = await boundaryMapModule.InvokeAsync<CurrentUserLocation?>("getCurrentUserLocationAsync");
+            }
+
+            if (loc == null)
+            {
+                Snackbar.Add("Could not determine current location.", Severity.Warning);
+                return;
+            }
+
+            var newPoint = new Vector2(loc.Lat, loc.Lng);
+            BoundryPoints.Add(newPoint);
+
+            Snackbar.Add("Added current location to boundary.", Severity.Success);
+            await InvokeAsync(StateHasChanged);
+            await SyncMapFromLists();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to get location: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Failed to get current location: {ex.Message}", Severity.Error);
         }
         finally
         {
             IsGettingLocation = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -393,22 +423,43 @@
                 boundaryMapModule = await JS.InvokeAsync<IJSObjectReference>(
                     "import", "./js/zone-boundary-map.js");
 
+                // Kick off the live tracker early (idempotent) so marker + focus logic can work.
+                _ = boundaryMapModule.InvokeVoidAsync("startUserLocationTracking");
+
+                // Try to get a quick current user location (via the map module's one-shot or cached watch)
+                // so we can open the map already focused near the user for new zones (much better
+                // default than a US-wide center).
+                CurrentUserLocation? userLocForCenter = null;
+                try
+                {
+                    userLocForCenter = await boundaryMapModule.InvokeAsync<CurrentUserLocation?>("getCurrentUserLocationAsync");
+                }
+                catch { /* non-fatal, fall back to default center logic */ }
+
                 // Default center...
                 double centerLat = 39.8283;
                 double centerLng = -98.5795;
                 double zoom = 8;
 
-                if (BoundryPoints.Any())
+                if (userLocForCenter != null && !BoundryPoints.Any() && !(EntryPoints.Any() || ExitPoints.Any() || DockPoints.Any() || TrailerPools.Any()))
+                {
+                    // New zone with no data yet: open focused on user's current location.
+                    centerLat = userLocForCenter.Lat;
+                    centerLng = userLocForCenter.Lng;
+                    zoom = 14;
+                }
+                else if (BoundryPoints.Any())
                 {
                     centerLat = BoundryPoints[0].X;
                     centerLng = BoundryPoints[0].Y;
                     zoom = 12;
                 }
-                else if (EntryPoints.Any() || ExitPoints.Any() || DockPoints.Any())
+                else if (EntryPoints.Any() || ExitPoints.Any() || DockPoints.Any() || TrailerPools.Any())
                 {
                     Vector2? first = EntryPoints.FirstOrDefault();
                     if (first == null) first = ExitPoints.FirstOrDefault();
                     if (first == null) first = DockPoints.FirstOrDefault();
+                    if (first == null) first = TrailerPools.FirstOrDefault();
 
                     if (first.HasValue)
                     {
@@ -553,15 +604,16 @@
         {
             try
             {
+                // Stop geolocation watcher to release resources.
+                await boundaryMapModule.InvokeVoidAsync("stopUserLocationTracking");
                 await boundaryMapModule.DisposeAsync();
             }
-            catch { /* ignore */ }
+            catch { /* best effort */ }
         }
     }
 
-    // Simple geolocation result shape (matches what JS returns)
-    private record GeolocationPosition(GeolocationCoords Coords);
-    private record GeolocationCoords(double Latitude, double Longitude, double? Accuracy);
+    // Matches the shape returned by getCurrentUserLocation / getCurrentUserLocationAsync in zone-boundary-map.js
+    private record CurrentUserLocation(double Lat, double Lng, double Accuracy);
 
     // Reusable table component for editing a list of points
     private partial class PointEditorTable : ComponentBase

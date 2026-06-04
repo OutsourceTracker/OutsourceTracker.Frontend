@@ -14,6 +14,8 @@
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
 
+@implements IAsyncDisposable
+
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 pb-4 flex-grow-1 d-flex flex-column trailer-page-container">
     
     <div class="d-flex justify-space-between align-center mb-4 flex-wrap gap-2">
@@ -242,7 +244,7 @@
                         <div style="text-align: center; color: #666; padding: 2rem; height: 100%; display: flex; flex-direction: column; justify-content: center;">
                             <MudIcon Icon="@Icons.Material.Filled.Map" Size="Size.Large" />
                             <p class="mt-2">Google Maps will load here</p>
-                            <p class="caption">Markers for all trailers will appear on the map</p>
+                            <p class="caption">Markers for all trailers will appear on the map. A blue marker shows your live current location.</p>
                         </div>
                     </div>
                 </MudCardContent>
@@ -535,7 +537,20 @@
 
     private async Task OpenBulkAddDialog()
     {
-        var instance = await DialogService.ShowAsync<BulkCreateTrailersDialog>("Bulk Create Trailers");
+        Guid? suggestedAccount = null;
+        if (selectedAccountFilter.Count == 1)
+        {
+            var first = selectedAccountFilter.First();
+            if (first.HasValue)
+                suggestedAccount = first;
+        }
+
+        var parameters = new DialogParameters<BulkCreateTrailersDialog>
+        {
+            { x => x.SuggestedAccountId, suggestedAccount }
+        };
+
+        var instance = await DialogService.ShowAsync<BulkCreateTrailersDialog>("Bulk Create Trailers", parameters);
         var result = await instance.GetReturnValueAsync<List<TrailerModel>>();
         if (result != null)
         {
@@ -639,14 +654,54 @@
         var instance = await DialogService.ShowAsync<LocationUpdateDialog>("Spot Trailers", parameters);
         var result = await instance.Result;
 
-        // Refresh after spotting (server may have updated locations)
         if (!result.Canceled)
         {
-            await LoadTrailers();
-            // Re-select any that still exist after refresh
-            var refreshedIds = new HashSet<Guid>(filteredTrailers.Select(t => t.Id));
-            selectedTrailerIds.RemoveWhere(id => !refreshedIds.Contains(id));
-            StateHasChanged();
+            // After spot, use the successful IDs from the response. Because SpotAsync parses "updatedTrailers"
+            // (extra from the call's JSON response, containing zone data etc from backend) and updates the
+            // service cache, the Gets below will be fast (cache hit) and give us the zone-updated models
+            // to patch into the list/map UI without a full reload.
+            bool patched = false;
+            if (result.Data is EquipmentLocationUpdateResponse<Guid> spotResult &&
+                spotResult.SuccessfulTrailers is { Length: > 0 })
+            {
+                foreach (var id in spotResult.SuccessfulTrailers)
+                {
+                    // Will prefer cache (populated from spot response JSON) or do a Get (which now has zone).
+                    var fresh = await Trailers.GetAsync(id, ignoreCache: false);
+                    if (fresh != null)
+                    {
+                        var idx = allTrailers.FindIndex(t => t.Id == id);
+                        if (idx >= 0)
+                        {
+                            allTrailers[idx] = fresh;
+                        }
+                        else
+                        {
+                            allTrailers.Add(fresh);
+                        }
+                        patched = true;
+                    }
+                }
+
+                if (patched)
+                {
+                    ApplyFilters();
+                    StateHasChanged();
+                    _ = RenderTrailersOnMap();
+                }
+
+                // Re-select logic using current filtered
+                var refreshedIds = new HashSet<Guid>(filteredTrailers.Select(t => t.Id));
+                selectedTrailerIds.RemoveWhere(id => !refreshedIds.Contains(id));
+            }
+            else
+            {
+                // Fallback to full refresh
+                await LoadTrailers();
+                var refreshedIds = new HashSet<Guid>(filteredTrailers.Select(t => t.Id));
+                selectedTrailerIds.RemoveWhere(id => !refreshedIds.Contains(id));
+                StateHasChanged();
+            }
         }
     }
 
@@ -654,8 +709,6 @@
 
     private async Task RenderTrailersOnMap()
     {
-        if (filteredTrailers == null || filteredTrailers.Count == 0) return;
-
         try
         {
             if (mapModule == null)
@@ -667,29 +720,42 @@
             {
                 await mapModule.InvokeVoidAsync("initMap", "googleMap", 39.8283, -98.5795, 4, DotNetObjectReference.Create(this));
                 mapInitialized = true;
+
+                // Start non-interactive, auto-updating current location marker.
+                // Safe to call even if geolocation is unavailable/denied.
+                _ = mapModule.InvokeVoidAsync("startUserLocationTracking");
             }
 
-            // Use the globally filtered list (respects both text search and map filters)
-            var markersData = filteredTrailers
-                .Where(t => t.Location.HasValue)
-                .Select(t => new
-                {
-                    id = t.Id,
-                    fullName = t.FullName,
-                    state = t.State.ToString(),
-                    type = t.Type.ToString(),
-                    accountShortCode = t.AccountShortCode,
-                    accountName = t.AccountName,
-                    zoneName = t.ZoneName,
-                    locatedByName = t.LocatedByName,
-                    locatedDate = t.LocatedDate,
-                    location = new { x = t.Location!.Value.X, y = t.Location!.Value.Y }
-                })
-                .ToList();
+            // Trailer markers (the addTrailerMarkers call internally clears previous trailers + zones)
+            if (filteredTrailers != null && filteredTrailers.Count > 0)
+            {
+                var markersData = filteredTrailers
+                    .Where(t => t.Location.HasValue)
+                    .Select(t => new
+                    {
+                        id = t.Id,
+                        fullName = t.FullName,
+                        state = t.State.ToString(),
+                        type = t.Type.ToString(),
+                        accountShortCode = t.AccountShortCode,
+                        accountName = t.AccountName,
+                        zoneName = t.ZoneName,
+                        locatedByName = t.LocatedByName,
+                        locatedDate = t.LocatedDate,
+                        location = new { x = t.Location!.Value.X, y = t.Location!.Value.Y }
+                    })
+                    .ToList();
 
-            await mapModule.InvokeVoidAsync("addTrailerMarkers", markersData);
+                await mapModule.InvokeVoidAsync("addTrailerMarkers", markersData);
+            }
+            else
+            {
+                // Clear trailers (and zones) so we have a clean slate when there are no trailers to show
+                await mapModule.InvokeVoidAsync("clearMarkers");
+            }
 
-            // Render zone borders with names (if zones are loaded)
+            // (Re-)render zones after trailer render (addTrailerMarkers clears them internally when used).
+            // This ensures zones + current location marker are visible even when there are 0 trailers.
             if (allZones.Any())
             {
                 var zonesData = allZones
@@ -835,5 +901,19 @@
         // Sort preferences
         public string? SortBy { get; set; }
         public bool SortDescending { get; set; } = true;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (mapModule != null)
+        {
+            try
+            {
+                // Stop the geolocation watch so it doesn't keep running after leaving the page.
+                await mapModule.InvokeVoidAsync("stopUserLocationTracking");
+                await mapModule.DisposeAsync();
+            }
+            catch { /* best effort cleanup */ }
+        }
     }
 }
