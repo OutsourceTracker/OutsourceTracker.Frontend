@@ -6,11 +6,17 @@ let dotNetHelper = null;
 let zonePolygons = [];
 let zoneLabels = [];
 
+// Zone names (labels) are only shown when zoomed in to avoid clutter at low zoom levels
+const ZONE_LABEL_ZOOM_THRESHOLD = 11;
+
 // Current user location (non-interactive, auto-updating)
 let currentLocationMarker = null;
 let currentLocationAccuracyCircle = null;
 let geolocationWatchId = null;
 let hasAutoCenteredOnUser = false;  // one-time, only for the main trailer live map
+
+// Track currently open info window so only one is open at a time
+let currentInfoWindow = null;
 
 export async function initMap(elementId, centerLat, centerLng, zoomLevel, dotNetRef) {
     dotNetHelper = dotNetRef;
@@ -33,6 +39,12 @@ export async function initMap(elementId, centerLat, centerLng, zoomLevel, dotNet
             fullscreenControl: true,
             mapId: getMapId()   // Required for AdvancedMarkerElement
         });
+
+        // Listen for zoom changes to toggle zone name label visibility
+        mapInstance.addListener('zoom_changed', updateZoneLabelVisibility);
+
+        // Initial check in case labels were pre-added or zoom state
+        updateZoneLabelVisibility();
 
         return true;
     } catch (err) {
@@ -124,7 +136,7 @@ export async function addTrailerMarkers(trailers) {
 
         // Use gmp-click for AdvancedMarkerElement (avoids deprecation warning)
         marker.addListener("gmp-click", () => {
-            infoWindow.open({ anchor: marker, map: mapInstance });
+            openInfoWindowSafely(infoWindow, marker);
             if (dotNetHelper) {
                 dotNetHelper.invokeMethodAsync("OnMarkerClicked", trailer.id);
             }
@@ -175,7 +187,7 @@ export function focusOnTrailer(trailerId) {
 
     // Open the stored InfoWindow anchored to the AdvancedMarkerElement (most reliable)
     if (marker._infoWindow) {
-        marker._infoWindow.open({ anchor: marker, map: mapInstance });
+        openInfoWindowSafely(marker._infoWindow, marker);
     } else {
         // Fallback: trigger the modern gmp-click event on AdvancedMarkerElement
         google.maps.event.trigger(marker, 'gmp-click');
@@ -187,6 +199,11 @@ export function clearMarkers() {
         if (marker) marker.map = null;
     });
     markers = [];
+
+    if (currentInfoWindow) {
+        currentInfoWindow.close();
+        currentInfoWindow = null;
+    }
 
     // Also clear any zone overlays when refreshing trailer markers
     clearZones();
@@ -201,6 +218,25 @@ function clearZones() {
     });
     zonePolygons = [];
     zoneLabels = [];
+}
+
+function openInfoWindowSafely(infoWindow, marker) {
+    if (currentInfoWindow && currentInfoWindow !== infoWindow) {
+        currentInfoWindow.close();
+    }
+    infoWindow.open({ anchor: marker, map: mapInstance });
+    currentInfoWindow = infoWindow;
+}
+
+function updateZoneLabelVisibility() {
+    if (!mapInstance || zoneLabels.length === 0) return;
+    const zoom = mapInstance.getZoom() || 0;
+    const visible = zoom >= ZONE_LABEL_ZOOM_THRESHOLD;
+    zoneLabels.forEach(label => {
+        if (label) {
+            label.map = visible ? mapInstance : null;
+        }
+    });
 }
 
 export function centerOnLocation(lat, lng, zoom = 12) {
@@ -384,12 +420,18 @@ export function addZonePolygons(zones) {
         `;
         labelContent.textContent = zone.shortCode || zone.fullName || "Zone";
 
+        const currentZoom = mapInstance.getZoom() || 0;
+        const showLabel = currentZoom >= ZONE_LABEL_ZOOM_THRESHOLD;
+
         const labelMarker = new google.maps.marker.AdvancedMarkerElement({
             position: { lat: centerLat, lng: centerLng },
-            map: mapInstance,
+            map: showLabel ? mapInstance : null,
             content: labelContent,
             zIndex: 999
         });
         zoneLabels.push(labelMarker);
     });
+
+    // Ensure visibility state matches current zoom (in case of race with zoom events)
+    updateZoneLabelVisibility();
 }

@@ -46,6 +46,13 @@
                        OnClick="OpenSpotDialog">
                 Spot
             </MudButton>
+
+            <MudButton StartIcon="@Icons.Material.Filled.Share"
+                       IconColor="Color.Surface"
+                       Disabled="@(selectedTrailerIds.Count == 0)"
+                       OnClick="OpenShareDialog">
+                Share
+            </MudButton>
         </MudButtonGroup>
     </div>
 
@@ -223,6 +230,15 @@
                                             </MudText>
                                         }
                                     </div>
+
+                                    @if (trailer.Location.HasValue)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.MyLocation"
+                                                       Size="Size.Small"
+                                                       Color="Color.Primary"
+                                                       Title="Open in Maps (geo:)"
+                                                       OnClick="() => OpenGeoForTrailer(trailer)" />
+                                    }
                                 </div>
                             </MudListItem>
                         }
@@ -703,6 +719,100 @@
                 StateHasChanged();
             }
         }
+    }
+
+    private async Task OpenShareDialog()
+    {
+        if (selectedTrailerIds.Count == 0) return;
+
+        var selected = allTrailers.Where(t => selectedTrailerIds.Contains(t.Id)).ToList();
+        if (selected.Count == 0) return;
+
+        var parameters = new DialogParameters<ShareTrailersDialog>
+        {
+            { x => x.Trailers, selected }
+        };
+
+        await DialogService.ShowAsync<ShareTrailersDialog>("Share Trailer Locations", parameters);
+    }
+
+    private async Task OpenGeoForTrailer(TrailerModel trailer)
+    {
+        if (trailer?.Location == null) return;
+
+        double lat = trailer.Location.Value.X;
+        double lng = trailer.Location.Value.Y;
+
+        string label = trailer.FullName ?? "Trailer";
+        if (!string.IsNullOrWhiteSpace(trailer.ZoneName))
+            label += $" in {trailer.ZoneName}";
+
+        string ua = "";
+        bool isMobile = false;
+        string platform = "unknown";
+        try
+        {
+            ua = await JS.InvokeAsync<string>("eval", "navigator.userAgent || ''");
+            isMobile = System.Text.RegularExpressions.Regex.IsMatch(ua, "Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            platform = DetectPlatform(ua);
+        }
+        catch { }
+
+        string uri;
+        if (!isMobile)
+        {
+            // Desktop: use web Google Maps (geo: not supported)
+            uri = $"https://www.google.com/maps/search/?api=1&query={lat:F6},{lng:F6}";
+        }
+        else
+        {
+            string escapedLabel = System.Net.WebUtility.UrlEncode(label);
+            string uParam = "";
+            if (trailer.LocationAccuracy.HasValue && trailer.LocationAccuracy.Value > 0)
+            {
+                // Use u= for uncertainty/accuracy in meters (supported on Android primarily, ignored or used on iOS)
+                uParam = $";u={trailer.LocationAccuracy.Value:F0}";
+            }
+
+            // Detailed geo: URI using coordinates + u=accuracy param + q=label param
+            // This uses all available location data (lat, lng, accuracy) and descriptive label (name + zone)
+            uri = $"geo:{lat:F6},{lng:F6}{uParam}?q={escapedLabel}";
+
+            // Platform-specific param tuning (all still use the geo: with u and q)
+            if (platform == "ios")
+            {
+                // iOS Apple Maps: geo:lat,lng?u=acc?q=label  -- q provides the pin label, u for accuracy
+                uri = $"geo:{lat:F6},{lng:F6}{uParam}?q={escapedLabel}";
+            }
+            else if (platform == "android")
+            {
+                // Android Google Maps: fully supports ;u= for accuracy radius + ?q= for labeled pin
+                uri = $"geo:{lat:F6},{lng:F6}{uParam}?q={escapedLabel}";
+            }
+            // other mobile: use the same detailed format
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("window.open", uri, "_blank");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error opening location URI: {ex.Message}");
+            // fallback web
+            string fallback = $"https://www.google.com/maps/search/?api=1&query={lat:F6},{lng:F6}";
+            await JS.InvokeVoidAsync("window.open", fallback, "_blank");
+        }
+    }
+
+    private string DetectPlatform(string ua)
+    {
+        ua = ua.ToLowerInvariant();
+        if (ua.Contains("android")) return "android";
+        if (ua.Contains("iphone") || ua.Contains("ipad") || ua.Contains("ipod")) return "ios";
+        if (ua.Contains("windows phone") || ua.Contains("iemobile")) return "windows";
+        if (ua.Contains("blackberry")) return "blackberry";
+        return "other";
     }
 
     // ==================== Google Maps Integration ====================
